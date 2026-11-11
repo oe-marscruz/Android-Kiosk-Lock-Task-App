@@ -415,7 +415,7 @@ class KioskManager:
             self.log_add("[4/6] Setting kiosk launcher as default home...")
             out, err, rc = adb(
                 "shell cmd package set-home-activity"
-                " com.example.webkiosk/.kiosklauncher.LauncherActivity")
+                " com.example.webkiosk/com.example.kiosklauncher.LauncherActivity")
             if rc == 0:
                 self.log_add("Custom launcher set as home. ✅")
             else:

@@ -366,7 +366,7 @@ Use these status values: **Pending**, **Implemented**, **Code/artifact verified*
 
 ### Session 1 — November 11, 2026
 
-- Status: **Device verified**; launcher acceptance passed on the test tablet. Branch `master`, baseline `97a7b97`; changes remain uncommitted. Fetch of `origin` showed no newer commit.
+- Status: **Device verified**; launcher acceptance passed on the test tablet. Baseline `97a7b97`; the Session 1 source and checker are committed on `codex/session-2-wifi` in the follow-up commit after Session 2. Fetch of `origin` showed no newer commit at the time of testing.
 - Changed the manifest launcher and the manager's Home component; added `tools/check_apk_components.py` and `tests/test_apk_components.py`. Original tracked APK remains unchanged. The rebuilt APK is `build/CU-Denver-Equity-Kiosk-session1.apk` (untracked build output).
 - Baseline reproduction: the original `build/CU-Denver-Equity-Kiosk.apk` has SHA-256 `37dd5190c673162e212da7c5b881c8ed06f5fde9a397349ac41ff8dac1befd34`. The artifact checker exited 1, reporting missing `com.example.webkiosk.kiosklauncher.LauncherActivity` and the expected Home declaration. On the test tablet, the existing installation produced `ClassNotFoundException` for that class after an explicit start; `am start -W` itself returned `Status: ok`, so the crash buffer was necessary to establish the failure.
 - Built in a temporary copy with `C:\Program Files\Git\bin\bash.exe <temporary-copy>/build-apk.sh`, using Android SDK build-tools 36.0.0, platform android-37.0 and Android Studio JBR. The compiler and signer emitted warnings but the build succeeded. This avoids deleting the existing build directory.

@@ -37,7 +37,7 @@
 
         <!-- Custom launcher — only shows the kiosk app -->
         <activity
-            android:name=".kiosklauncher.LauncherActivity"
+            android:name="com.example.kiosklauncher.LauncherActivity"
             android:exported="true"
             android:label="Kiosk Launcher"
             android:lockTaskMode="if_whitelisted">
