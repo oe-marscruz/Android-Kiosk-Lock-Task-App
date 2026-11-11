@@ -48,6 +48,7 @@ APP_DIR="$SCRIPT_DIR/app/src/main"
 MANIFEST="$APP_DIR/AndroidManifest.xml"
 JAVA_SRC="$APP_DIR/java/com/example/webkiosk/MainActivity.java"
 WIFI_SRC="$APP_DIR/java/com/example/webkiosk/WifiSettingsActivity.java"
+WIFI_INPUT_SRC="$APP_DIR/java/com/example/webkiosk/WifiInput.java"
 DEVICE_ADMIN_SRC="$APP_DIR/java/com/example/webkiosk/KioskDeviceAdminReceiver.java"
 LAUNCHER_SRC="$APP_DIR/java/com/example/kiosklauncher/LauncherActivity.java"
 RES_DIR="$APP_DIR/res"
@@ -85,6 +86,7 @@ echo "=== Compiling Java ==="
   "$GEN_DIR/com/example/webkiosk/R.java" \
   "$JAVA_SRC" \
   "$WIFI_SRC" \
+  "$WIFI_INPUT_SRC" \
   "$DEVICE_ADMIN_SRC" \
   "$LAUNCHER_SRC"
 
