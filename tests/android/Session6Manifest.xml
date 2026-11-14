@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.webkiosk.session6tests">
+    <application android:label="Kiosk session six tests" android:testOnly="true"
+        android:allowBackup="false" android:usesCleartextTraffic="false" />
+    <instrumentation android:name="com.example.webkiosk.session6tests.InactivityDeviceTest"
+        android:targetPackage="com.example.webkiosk.session6fixture" android:functionalTest="true" />
+</manifest>

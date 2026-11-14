@@ -1,73 +1,87 @@
-name: Build macOS DMG
+name: Package verified macOS DMG
 
 on:
-  push:
-    branches: [main, master]
-  workflow_dispatch:  # allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: HTTPS URL of the reviewed release APK
+        required: true
+        type: string
+      version_code:
+        description: Approved release version code
+        required: true
+        type: string
+      previous_version_code:
+        description: Previous deployed code from the release ledger (0 for first enrollment)
+        required: true
+        type: string
+      version_name:
+        description: Approved release version name
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
-  build-dmg:
+  package:
     runs-on: macos-latest
-
+    environment: release
+    env:
+      KIOSK_RELEASE_CERT_SHA256: ${{ vars.KIOSK_RELEASE_CERT_SHA256 }}
+      KIOSK_VERSION_CODE: ${{ inputs.version_code }}
+      KIOSK_PREVIOUS_VERSION_CODE: ${{ inputs.previous_version_code }}
+      KIOSK_VERSION_NAME: ${{ inputs.version_name }}
+      KIOSK_RELEASE_APK: incoming/release.apk
+      RELEASE_APK_URL: ${{ inputs.apk_url }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
-          python-version: "3.12"
-
-      - name: Download Android Platform Tools (macOS)
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android build tools
+        run: sdkmanager 'build-tools;36.0.0' 'platforms;android-35'
+      - name: Host regression tests
         run: |
-          curl -L -o /tmp/platform-tools.zip \
-            "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
-          unzip -o /tmp/platform-tools.zip -d .
-
-      - name: Build APK (skip — use pre-built)
+          python3 -m unittest discover -s tests -v
+          bash tests/test_macos_packaging.sh
+      - name: Clean macOS compilation and component check
         run: |
-          mkdir -p dist/build
-          if [ -f "build/CU-Denver-Equity-Kiosk.apk" ]; then
-            cp build/CU-Denver-Equity-Kiosk.apk dist/build/
-            echo "Using pre-built APK"
-          else
-            echo "No pre-built APK found. Build it first on Windows/Linux."
-            echo "Run: bash build-apk.sh and commit build/CU-Denver-Equity-Kiosk.apk"
-            exit 1
-          fi
-
-      - name: Install PyInstaller
-        run: pip3 install pyinstaller
-
-      - name: Build macOS .app
+          env KIOSK_VERSION_CODE=1 KIOSK_VERSION_NAME=0.0.0-dev bash build-apk-mac.sh development
+          python3 tools/check_apk_components.py build/development/CU-Denver-Equity-Kiosk-development-v1.apk --aapt2 "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+      - name: Download and verify release APK
         run: |
-          pyinstaller \
-            --onefile \
-            --windowed \
-            --name "CU-Denver-Equity-Kiosk-Manager" \
-            --add-data "platform-tools:platform-tools" \
-            --osx-bundle-identifier "edu.ucdenver.equity-kiosk-manager" \
-            kiosk-manager.py
-
-      - name: Create DMG
+          case "$RELEASE_APK_URL" in https://*) ;; *) echo 'HTTPS APK URL required' >&2; exit 1;; esac
+          mkdir -p incoming
+          curl --fail --location --proto '=https' --proto-redir '=https' --output "$KIOSK_RELEASE_APK" "$RELEASE_APK_URL"
+          bash tools/verify-release-apk.sh "$KIOSK_RELEASE_APK"
+      - name: Download Android Platform Tools
         run: |
-          DMG_DIR="/tmp/kiosk-dmg"
-          rm -rf "$DMG_DIR"
-          mkdir -p "$DMG_DIR"
-
-          cp -R "dist/CU-Denver-Equity-Kiosk-Manager.app" "$DMG_DIR/"
-          mkdir -p "$DMG_DIR/Kiosk-APK"
-          cp dist/build/CU-Denver-Equity-Kiosk.apk "$DMG_DIR/Kiosk-APK/"
-
-          hdiutil create \
-            -volname "CU Denver Equity Kiosk Manager" \
-            -srcfolder "$DMG_DIR" \
-            -ov -format UDZO \
-            "CU-Denver-Equity-Kiosk-Manager.dmg"
-
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v7
+          curl --fail --location --output platform-tools.zip https://dl.google.com/android/repository/platform-tools-latest-darwin.zip
+          unzip -o platform-tools.zip -d .
+      - name: Package verified APK
+        run: bash package-mac.sh
+      - uses: actions/upload-artifact@v7
         with:
           name: macOS-DMG
           path: CU-Denver-Equity-Kiosk-Manager.dmg
           retention-days: 30
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: macOS-packaging-evidence
+          path: |
+            dist/macos-evidence/
+            tmp/package-mac.*/relocated-resources.json
+            tmp/package-mac.*/toolchain.txt
+          retention-days: 30
+          if-no-files-found: warn

@@ -10,6 +10,8 @@ A complete toolkit for locking a Lenovo Tab K11 Gen 2 (Android 15) tablet into k
 
 ## Architecture
 
+**Release signing status:** Historical APKs and desktop downloads use an exposed signing identity. Replacement production signing and device migration are pending. Read [the signing and migration guide](SIGNING.md) before deployment; local development APKs are for disposable test installations.
+
 ```
 Desktop PC                          Lenovo Tablet (Android 15)
 ┌─────────────────────────┐         ┌──────────────────────────────┐
@@ -51,9 +53,20 @@ Desktop PC                          Lenovo Tablet (Android 15)
 ### Deploy
 1. Connect tablet via USB — accept the debugging prompt
 2. Double-click `dist/CU-Denver-Equity-Kiosk-Manager.exe`
-3. Click **Setup Kiosk**
-4. Tap the **CU Denver Equity** app once so it configures the lock task allowlist (kiosk, Chrome, WiFi settings)
-5. Tap the **CU Denver Equity** app again to enter kiosk mode
+3. Refresh devices and select the tablet serial when more than one is connected.
+4. Unlock the tablet and click **Setup Kiosk**. Setup installs the selected APK, verifies the exact owner, preserves required apps, configures Home, and opens the launcher to apply policy.
+5. Require **Setup Complete**. This is shown only after ownership, Home, required package states, lock-task packages/features, and active managed lock task have been verified. A failure can leave partial changes; inspect the tablet before retrying. Unknown Android diagnostic formats fail verification.
+
+From source, provide a reviewed APK through `KIOSK_RELEASE_APK` before launching the GUI. Windows command-line setup delegates to the same provisioning engine and returns a nonzero exit code on failure:
+
+```powershell
+.\setup-kiosk.bat --serial TABLET_SERIAL --apk "C:\Reviewed Builds\kiosk.apk"
+# If ADB is installed elsewhere, add: --adb "C:\Android SDK\platform-tools\adb.exe"
+.\.venv\Scripts\python.exe provisioning.py verify --serial TABLET_SERIAL
+.\exit-kiosk.bat --serial TABLET_SERIAL
+```
+
+The batch wrappers use the project virtual environment if available, otherwise the Windows Python launcher (`py -3`). They do not build an APK or reuse an older artifact after a failed build. The frozen GUI uses its bundled, release-verified APK. Signing mismatch stops setup and refers to [the migration guide](SIGNING.md); setup never automatically uninstalls the kiosk or resets a device. Provisioning supports foreground Android user 0. Verification requires the kiosk, Chrome, Settings and the required clock package to be installed and available. Read-only `provisioning.py devices` lists exact connection states; `verify` makes no device changes. `restore` restores only this tool's recorded optional-package changes for the selected serial.
 
 ---
 
@@ -63,9 +76,9 @@ The `.exe` is a single 36 MB file — no installer, no dependencies. It bundles 
 
 | Button | What it does |
 |--------|-------------|
-| **🔒 Setup Kiosk** | 6-step automated setup (check device → install kiosk APK → set device owner → set launcher → hide apps → verify) |
-| **🔓 Exit Kiosk** | Force-stops the kiosk app — tablet returns to launcher |
-| **📱 Restore All Apps** | Re-enables all hidden apps (Chrome, Settings, Play Store, etc.) |
+| **🔒 Setup Kiosk** | Verifies the selected device, installs the reviewed APK, enrolls/verifies the owner, applies reviewed package changes, configures Home, and verifies active lock task |
+| **🔓 Exit Kiosk** | Requests a force-stop and verifies lock task is inactive; device-owner policy remains installed |
+| **📱 Restore Setup Changes** | Restores only optional packages this tool changed on the selected tablet, preserving previously disabled apps |
 | **🌐 Setup Remote Management** | Guided wizard for Android Management API enrollment |
 | **⚠ Factory Reset Tablet** | Wipes tablet to factory state (double confirmation) |
 | **🗖 Fullscreen (F11)** | Toggles fullscreen (Esc to exit) |
@@ -102,47 +115,27 @@ The `.exe` is a single 36 MB file — no installer, no dependencies. It bundles 
 
 ---
 
-## Download the prebuilt .exe
+## Release downloads and builds
 
-Non-technical users don't need to build anything. A prepackaged Windows `.exe` is built automatically on every push to `main`/`master` by the `.github/workflows/build-exe.yml` workflow and can be downloaded two ways:
+Historical downloads may contain the exposed signing identity. Session 4 replaces automatic rolling publication with manually dispatched packaging of an independently verified release APK. No production release under the replacement identity has been approved yet.
 
-- **GitHub Releases** (recommended) — a rolling **Latest build** release is published automatically on every push to `main`/`master`, so `CU-Denver-Equity-Kiosk-Manager.exe` is always downloadable from the repo's **Releases** page — no PR or build required. Versioned releases are also created when a version tag (e.g. `v1.0.0`) is pushed.
-- **GitHub Actions artifacts** — open the **Actions** tab, select the latest **Build Windows EXE** run, and download the `Windows-EXE` artifact.
+See [APK signing and device migration](SIGNING.md) for protected key inputs, certificate verification, version codes, desktop packaging, CI configuration, and existing-device migration. Do not use a repository APK or a development APK for a new production deployment.
 
-The `.exe` is a single self-contained file (bundles ADB and the kiosk APK) — no installer or dependencies. Just double-click it, connect the tablet via USB, and click **Setup Kiosk**.
+For a local development build, run the platform setup script first, then:
 
----
-
-## Building from source
-
-### Windows
 ```bash
-setup-tools.bat        # One-time: downloads ADB, JDK 17, Android SDK
-bash build-apk.sh      # Compiles the kiosk APK
+bash build-apk.sh development
+# On macOS:
+bash build-apk-mac.sh development
 ```
 
-Then package the GUI (or just run the one-step script):
-```bash
-bash package-win.sh   # Builds the APK and packages the .exe
-```
+Development builds use an ignored local identity and cannot update the old exposed-key installation. Packaging requires an already built, reviewed release APK through `KIOSK_RELEASE_APK` plus the approved certificate and version metadata described in the signing guide. Use `bash package-win.sh` or `bash package-mac.sh`; both verify the APK before invoking PyInstaller.
 
-Or manually:
-```bash
-pip install pyinstaller qrcode pillow
-python -m PyInstaller --onefile --windowed --name "CU-Denver-Equity-Kiosk-Manager" \
-  --add-data "platform-tools;platform-tools" \
-  --add-data "build/CU-Denver-Equity-Kiosk.apk;." \
-  kiosk-manager.py
-```
+The GitHub Actions workflows now accept an HTTPS release APK URL by manual dispatch, verify its certificate and metadata against the protected `release` environment, and upload a desktop artifact for review. They do not publish a rolling GitHub Release. Actual Windows/macOS package acceptance and replacement of historical downloads remain pending.
 
-### macOS
-```bash
-chmod +x setup-tools-mac.sh build-apk-mac.sh package-mac.sh
-./setup-tools-mac.sh    # One-time: downloads toolchain
-./package-mac.sh        # Builds .dmg
-```
+The macOS packager uses a PyInstaller directory-based `.app` with bundled ADB and the reviewed APK. It checks the APK's manifest against its DEX component definitions before bundling. It then copies the app outside the checkout and runs `--check-bundle` before creating the DMG or adding the optional manual-install APK. That check uses the GUI's resource paths, verifies the APK hash, and executes only `adb version`; it does not discover or configure tablets. The local script and CI use this same packaging path. [Session 9 evidence](REMEDIATION_PLAN.md#session-9---november-13-2026) distinguishes host checks from pending macOS acceptance.
 
-Or push to GitHub — the `.github/workflows/build-dmg.yml` auto-builds the macOS `.dmg` on every push.
+On a Mac, use Python 3.12 with Tkinter and set `KIOSK_PYTHON` to that interpreter if it is not `python3`. The packager installs the pinned [PyInstaller requirement](requirements-macos-build.txt). Supply the reviewed release APK and signing metadata from [the signing guide](SIGNING.md), then run `bash package-mac.sh`. Resource-check and toolchain reports are written under `dist/macos-evidence/`. The workflow also prepares a clean development APK compilation check on its Mac runner; a workflow definition is not evidence of a successful run. Relocated GUI use, tablet discovery/setup, and each supported Mac architecture still require acceptance.
 
 ---
 

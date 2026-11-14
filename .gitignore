@@ -15,6 +15,11 @@ build/*.idsig
 __pycache__/
 *.pyc
 
+# Local IDE state and generated APK snapshots.
+/.idea/
+/*.iml
+/build/*.apk
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -24,3 +29,18 @@ desktop.ini
 /tmp/
 *.zip
 *.tmp
+
+# Signing material must never be committed or bundled.
+.local-signing/
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.pass
+*.password
+.env
+.env.*
+build/development/
+build/release/

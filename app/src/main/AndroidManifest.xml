@@ -3,6 +3,7 @@
     package="com.example.webkiosk">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <!-- WiFi connection on Android 13+ (Android 15 tablet) -->
@@ -15,11 +16,12 @@
         android:allowBackup="true"
         android:label="CU Denver Equity"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
 
         <!-- Main kiosk activity -->
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTask"
             android:exported="true"
             android:lockTaskMode="if_whitelisted">
             <intent-filter>
@@ -36,7 +38,7 @@
 
         <!-- Custom launcher — only shows the kiosk app -->
         <activity
-            android:name=".kiosklauncher.LauncherActivity"
+            android:name="com.example.kiosklauncher.LauncherActivity"
             android:exported="true"
             android:label="Kiosk Launcher"
             android:lockTaskMode="if_whitelisted">

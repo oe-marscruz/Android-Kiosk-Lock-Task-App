@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.TransportInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -93,64 +94,86 @@ public class WifiSettingsActivity extends Activity {
     }
 
     private void updateStatus() {
-        if (wifiManager == null) return;
-        if (!wifiManager.isWifiEnabled()) {
-            statusView.setText("WiFi is OFF.\nTurn on WiFi in the tablet's Settings app, then return here.");
+        if (wifiManager == null) {
+            statusView.setText("WiFi service is unavailable. Open the tablet's Settings to check WiFi.");
             return;
         }
-        String ssid = getCurrentSsid();
-        if (ssid != null && !ssid.isEmpty()) {
-            statusView.setText("Connected to: " + ssid);
-        } else {
-            statusView.setText("Not connected to any WiFi network.");
+        try {
+            if (!wifiManager.isWifiEnabled()) {
+                statusView.setText("WiFi is OFF.\nTurn on WiFi in the tablet's Settings app, then return here.");
+                return;
+            }
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) {
+                statusView.setText("WiFi is on, but connection status is unavailable. Check Settings.");
+                return;
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                @SuppressWarnings("deprecation")
+                NetworkInfo info = cm.getActiveNetworkInfo();
+                if (info == null || !info.isConnected() || info.getType() != ConnectivityManager.TYPE_WIFI) {
+                    statusView.setText("WiFi is on; no active WiFi connection is detected.");
+                } else {
+                    String ssid = getCurrentSsid(null);
+                    statusView.setText(ssid == null ? "WiFi is connected; the network name is unavailable. Check Settings for details."
+                            : "Connected to: " + ssid);
+                }
+                return;
+            }
+            Network active = cm.getActiveNetwork();
+            NetworkCapabilities caps = active == null ? null : cm.getNetworkCapabilities(active);
+            if (active != null && caps == null) {
+                statusView.setText("WiFi is on, but connection status is unavailable. Check Settings.");
+            } else if (caps == null || !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                statusView.setText("WiFi is on; no active WiFi connection is detected.");
+            } else {
+                String ssid = getCurrentSsid(caps);
+                statusView.setText(ssid == null ? "WiFi is connected; the network name is unavailable. Check Settings for details."
+                        : "Connected to: " + ssid);
+            }
+        } catch (SecurityException e) {
+            statusView.setText("WiFi status is unavailable due to permissions. Check the tablet's Settings.");
         }
     }
 
     @SuppressWarnings("deprecation")
-    private String getCurrentSsid() {
+    private String getCurrentSsid(NetworkCapabilities caps) {
         String ssid = null;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            if (cm != null) {
-                Network activeNetwork = cm.getActiveNetwork();
-                if (activeNetwork != null) {
-                    NetworkCapabilities caps = cm.getNetworkCapabilities(activeNetwork);
-                    if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                        TransportInfo transportInfo = caps.getTransportInfo();
-                        if (transportInfo instanceof WifiInfo) {
-                            WifiInfo wifiInfo = (WifiInfo) transportInfo;
-                            ssid = wifiInfo.getSSID();
-                        }
-                    }
-                }
+            TransportInfo transportInfo = caps.getTransportInfo();
+            if (transportInfo instanceof WifiInfo) {
+                ssid = ((WifiInfo) transportInfo).getSSID();
             }
         }
 
         // Fallback for API < 31 or if ConnectivityManager returned null/unknown
-        if ((ssid == null || "<unknown ssid>".equals(ssid)) && wifiManager != null) {
-            WifiInfo info = wifiManager.getConnectionInfo();
-            if (info != null) {
-                ssid = info.getSSID();
+        if (WifiInput.visibleSsid(ssid) == null && wifiManager != null) {
+            try {
+                WifiInfo info = wifiManager.getConnectionInfo();
+                if (info != null) ssid = info.getSSID();
+            } catch (SecurityException ignored) {
+                return null;
             }
         }
 
-        if (ssid == null || "<unknown ssid>".equals(ssid)) {
-            return null;
-        }
-
-        if (ssid.startsWith("\"") && ssid.endsWith("\"") && ssid.length() > 1) {
-            ssid = ssid.substring(1, ssid.length() - 1);
-        }
-        return ssid;
+        return WifiInput.visibleSsid(ssid);
     }
 
     private void addNetwork() {
-        String ssid = ssidInput.getText().toString().trim();
+        String ssid = ssidInput.getText().toString();
         String password = passwordInput.getText().toString();
 
         if (ssid.isEmpty()) {
             messageView.setText("Please enter the network name (SSID).");
+            return;
+        }
+        if (!WifiInput.validSsid(ssid)) {
+            messageView.setText("Network name must be 1 to 32 UTF-8 bytes. Check the name and try again.");
+            return;
+        }
+        if (!WifiInput.validPassword(password)) {
+            messageView.setText("For WPA2, enter an 8 to 63 character ASCII password, or leave it empty for an open network.");
             return;
         }
 
@@ -159,27 +182,35 @@ public class WifiSettingsActivity extends Activity {
             return;
         }
 
+        if (wifiManager == null) {
+            messageView.setText("WiFi service is unavailable. Open the tablet's Settings to connect.");
+            return;
+        }
+
         if (!ensurePermissions()) {
             return;
         }
 
-        WifiNetworkSuggestion.Builder builder =
-                new WifiNetworkSuggestion.Builder().setSsid(ssid);
-        if (!password.isEmpty()) {
-            builder.setWpa2Passphrase(password);
-        }
-
-        List<WifiNetworkSuggestion> suggestions = new ArrayList<>();
-        suggestions.add(builder.build());
-
-        int result = wifiManager.addNetworkSuggestions(suggestions);
-        if (result == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
-            messageView.setText("Network added. Follow the on-screen prompt to connect.");
-            Toast.makeText(this, "WiFi network added", Toast.LENGTH_SHORT).show();
-        } else if (result == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
-            messageView.setText("This network is already added. Check the on-screen prompt to connect.");
-        } else {
-            messageView.setText("Could not add the network. Check the name and password, then try again.");
+        try {
+            WifiNetworkSuggestion.Builder builder = new WifiNetworkSuggestion.Builder().setSsid(ssid);
+            if (!password.isEmpty()) {
+                builder.setWpa2Passphrase(password);
+            }
+            List<WifiNetworkSuggestion> suggestions = new ArrayList<>();
+            suggestions.add(builder.build());
+            int result = wifiManager.addNetworkSuggestions(suggestions);
+            if (result == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
+                messageView.setText("Network suggestion submitted. Approve it if prompted, then check Settings to confirm connection.");
+                Toast.makeText(this, "Network suggestion submitted", Toast.LENGTH_SHORT).show();
+            } else if (result == WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_DUPLICATE) {
+                messageView.setText("This network is already suggested. Check Settings to confirm connection and any required approval.");
+            } else {
+                messageView.setText("Could not add the network. Check Settings and try again.");
+            }
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            messageView.setText("Invalid network name or password. Check the values and try again.");
+        } catch (SecurityException e) {
+            messageView.setText("WiFi access was denied. Check app permissions in Settings, then try again.");
         }
     }
 
@@ -219,7 +250,8 @@ public class WifiSettingsActivity extends Activity {
                 messageView.setText("Permission granted. Tap Connect again.");
                 updateStatus();
             } else {
-                messageView.setText("Permission denied. WiFi connection requires this permission.");
+                messageView.setText("Permission denied. Allow WiFi access in app Settings or use the tablet's WiFi Settings.");
+                updateStatus();
             }
         }
     }

@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.webkiosk.navigationtests">
+    <application android:label="Kiosk navigation tests" android:testOnly="true"
+        android:allowBackup="false" android:usesCleartextTraffic="false" />
+    <instrumentation android:name="com.example.webkiosk.navigationtests.NavigationDeviceTest"
+        android:targetPackage="com.example.webkiosk" android:functionalTest="true" />
+</manifest>

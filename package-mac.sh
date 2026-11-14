@@ -1,107 +1,72 @@
-#!/bin/bash
-# macOS: Build and package the Kiosk Manager into a .dmg
-# Run this on a Mac after running setup-tools-mac.sh
-set -e
-cd "$(dirname "$0")"
+#!/usr/bin/env bash
+set +x
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
+cd "$ROOT"
+APP_NAME=CU-Denver-Equity-Kiosk-Manager
+PYTHON="${KIOSK_PYTHON:-python3}"
 
-APP_NAME="CU-Denver-Equity-Kiosk-Manager"
-DMG_NAME="CU-Denver-Equity-Kiosk-Manager"
+[ "$(uname -s)" = Darwin ] || { echo 'ERROR: Run macOS packaging on a Mac.' >&2; exit 1; }
+[ -n "${KIOSK_RELEASE_APK:-}" ] || { echo 'ERROR: Set KIOSK_RELEASE_APK to a protected-key release APK.' >&2; exit 1; }
+[ -x platform-tools/adb ] || { echo 'ERROR: Run setup-tools-mac.sh to install macOS ADB.' >&2; exit 1; }
 
-echo "============================================"
-echo " Building $APP_NAME.dmg for macOS"
-echo "============================================"
+mkdir -p "$ROOT/tmp" "$ROOT/dist"
+WORK="$(mktemp -d "$ROOT/tmp/package-mac.XXXXXXXX")"
+STAGED_APK="$WORK/CU-Denver-Equity-Kiosk.apk"
+cp "$KIOSK_RELEASE_APK" "$STAGED_APK"
+bash tools/verify-release-apk.sh "$STAGED_APK"
+source tools/android-toolchain.sh
+kiosk_toolchain "$ROOT"
+"$PYTHON" tools/check_apk_components.py "$STAGED_APK" --aapt2 "$BUILD_TOOLS/aapt2"
+APK_SHA256="$(shasum -a 256 "$STAGED_APK" | awk '{print $1}')"
 
-# Step 0: Check prerequisites
-if [ ! -f "platform-tools/adb" ]; then
-    echo "ERROR: platform-tools not found. Run setup-tools-mac.sh first."
-    exit 1
-fi
+"$PYTHON" -m pip install -r requirements-macos-build.txt
+"$PYTHON" -m PyInstaller --noconfirm --clean --onedir --windowed \
+    --name "$APP_NAME" --distpath "$ROOT/dist" \
+    --workpath "$WORK/pyinstaller" --specpath "$WORK" \
+    --add-binary "$ROOT/platform-tools/adb:platform-tools" \
+    --add-data "$STAGED_APK:." \
+    --osx-bundle-identifier edu.ucdenver.equity-kiosk-manager \
+    "$ROOT/kiosk-manager.py"
 
-if ! command -v python3 &>/dev/null; then
-    echo "ERROR: python3 not found."
-    exit 1
-fi
+# Check the app outside the checkout before adding the optional sibling APK.
+DMG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kiosk-dmg.XXXXXXXX")"
+trap 'rm -rf -- "$DMG_DIR"' EXIT
+DMG_DIR="$(cd "$DMG_DIR" && pwd -P)"
+case "$DMG_DIR/" in "$ROOT/"*) echo 'ERROR: Relocation directory must be outside the checkout.' >&2; exit 1;; esac
+ditto "$ROOT/dist/$APP_NAME.app" "$DMG_DIR/$APP_NAME.app"
+(
+    cd "$DMG_DIR"
+    unset KIOSK_RELEASE_APK PYTHONPATH PYTHONHOME
+    "$DMG_DIR/$APP_NAME.app/Contents/MacOS/$APP_NAME" --check-bundle \
+        --expected-apk-sha256 "$APK_SHA256" --report "$WORK/relocated-resources.json"
+)
+cat "$WORK/relocated-resources.json"
 
-# Step 1: Build the APK
-echo "[1/4] Building kiosk APK..."
-bash build-apk-mac.sh
-mkdir -p dist/build
-cp build/CU-Denver-Equity-Kiosk.apk dist/build/
+{
+    sw_vers
+    uname -m
+    "$JDK/bin/java" -version 2>&1
+    cat "$BUILD_TOOLS/source.properties"
+    cat "$PLATFORM/source.properties"
+    "$PYTHON" -m PyInstaller --version
+} > "$WORK/toolchain.txt"
+mkdir -p "$ROOT/dist/macos-evidence"
+cp "$WORK/relocated-resources.json" "$WORK/toolchain.txt" "$ROOT/dist/macos-evidence/"
 
-# Step 2: Install PyInstaller if needed
-if ! python3 -c "import PyInstaller" 2>/dev/null; then
-    echo "[2/4] Installing PyInstaller..."
-    pip3 install pyinstaller
-else
-    echo "[2/4] PyInstaller already installed."
-fi
-
-# Step 3: Build macOS .app bundle
-echo "[3/4] Building macOS application bundle..."
-rm -rf dist/"$APP_NAME" dist/"$APP_NAME".app build/"$APP_NAME" "$APP_NAME".spec 2>/dev/null || true
-
-pyinstaller \
-    --onefile \
-    --windowed \
-    --name "$APP_NAME" \
-    --add-data "platform-tools:platform-tools" \
-    --osx-bundle-identifier "edu.ucdenver.equity-kiosk-manager" \
-    kiosk-manager.py
-
-# Step 4: Create .dmg
-echo "[4/4] Creating .dmg disk image..."
-rm -f "$DMG_NAME.dmg"
-
-# Create a temporary folder for dmg contents
-DMG_DIR="/tmp/kiosk-dmg"
-rm -rf "$DMG_DIR"
-mkdir -p "$DMG_DIR"
-
-# Copy the .app bundle
-cp -R "dist/$APP_NAME.app" "$DMG_DIR/"
-
-# Copy the APK
 mkdir -p "$DMG_DIR/Kiosk-APK"
-cp dist/build/CU-Denver-Equity-Kiosk.apk "$DMG_DIR/Kiosk-APK/"
-
-# Create a README for the dmg
+cp "$STAGED_APK" "$DMG_DIR/Kiosk-APK/"
 cat > "$DMG_DIR/README.txt" << 'EOF'
-CU Denver Equity — Kiosk Manager
-==================================
+CU Denver Equity - Kiosk Manager
 
-Double-click the Kiosk Manager app to launch.
-
-The Kiosk-APK folder contains the latest APK for manual
-installation if needed.
-
-Requirements:
-- USB cable to connect the Lenovo tablet
-- USB Debugging enabled on the tablet
-- No Google accounts on the tablet (needed to set device owner)
-
-For support, refer to the Android Kiosk Lock Task Mode project folder.
+Drag the app to Applications and launch it there.
+The app includes ADB and its reviewed release APK.
+Kiosk-APK contains the same APK for manual installation.
+Connect the designated test tablet and accept USB debugging before setup.
+Device ownership, enrollment and signing migration require separate acceptance.
 EOF
-
-# Build the dmg
-hdiutil create \
-    -volname "CU Denver Equity Kiosk Manager" \
-    -srcfolder "$DMG_DIR" \
-    -ov -format UDZO \
-    "$DMG_NAME.dmg"
-
-# Cleanup
-rm -rf build/"$APP_NAME" "$APP_NAME".spec "$DMG_DIR"
-
-echo ""
-echo "============================================"
-echo " SUCCESS"
-echo "============================================"
-echo "DMG created: $DMG_NAME.dmg"
-ls -lh "$DMG_NAME.dmg"
-echo ""
-echo "Distribute this .dmg to end users."
-echo "They just need to:"
-echo "  1. Open the .dmg"
-echo "  2. Drag the app to Applications"
-echo "  3. Connect the tablet via USB"
-echo "  4. Launch the app"
+hdiutil create -volname 'CU Denver Equity Kiosk Manager' \
+    -srcfolder "$DMG_DIR" -ov -format UDZO "$WORK/$APP_NAME.dmg"
+cp "$WORK/$APP_NAME.dmg" "$ROOT/$APP_NAME.dmg"
+echo "DMG ready: $ROOT/$APP_NAME.dmg"
+echo "Relocated resource and toolchain evidence: $ROOT/dist/macos-evidence"

@@ -16,6 +16,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.webkiosk.R;
+import com.example.webkiosk.NavigationPolicy;
+import com.example.webkiosk.KioskDeviceAdminReceiver;
 
 import java.util.Date;
 
@@ -45,8 +47,13 @@ public class LauncherActivity extends Activity {
     }
 
     private void openChrome() {
+        if (!NavigationPolicy.isAllowed(NavigationPolicy.START_URL)) {
+            Toast.makeText(this, "Navigation blocked: only approved HTTPS sites are allowed.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"));
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(NavigationPolicy.START_URL));
             intent.setPackage("com.android.chrome");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -119,11 +126,18 @@ public class LauncherActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // If in lock task mode, stay locked
+        // Reapply policy after enrollment and on subsequent setup passes.
+        KioskDeviceAdminReceiver.configureLockTask(this);
         DevicePolicyManager dpm = (DevicePolicyManager)
                 getSystemService(Context.DEVICE_POLICY_SERVICE);
-        if (dpm.isLockTaskPermitted(getPackageName())) {
-            // Already in lock task mode — do nothing
+        if (dpm != null && dpm.isDeviceOwnerApp(getPackageName())
+                && dpm.isLockTaskPermitted(getPackageName())) {
+            try {
+                startLockTask();
+            } catch (IllegalStateException | SecurityException e) {
+                Toast.makeText(this, "Managed lock task could not start. Setup is incomplete.",
+                        Toast.LENGTH_LONG).show();
+            }
         }
     }
 
