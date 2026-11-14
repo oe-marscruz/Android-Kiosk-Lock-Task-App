@@ -1,78 +1,69 @@
-name: Build Windows EXE
+name: Package verified Windows EXE
 
 on:
-  push:
-    branches: [main, master]
-    tags: ['v*']
-  workflow_dispatch:  # allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: HTTPS URL of the reviewed release APK
+        required: true
+        type: string
+      version_code:
+        description: Approved release version code
+        required: true
+        type: string
+      previous_version_code:
+        description: Previous deployed code from the release ledger (0 for first enrollment)
+        required: true
+        type: string
+      version_name:
+        description: Approved release version name
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
-  build-exe:
+  package:
     runs-on: windows-latest
-    permissions:
-      contents: write  # needed to create/update the GitHub Release
-
+    environment: release
+    env:
+      KIOSK_RELEASE_CERT_SHA256: ${{ vars.KIOSK_RELEASE_CERT_SHA256 }}
+      KIOSK_VERSION_CODE: ${{ inputs.version_code }}
+      KIOSK_PREVIOUS_VERSION_CODE: ${{ inputs.previous_version_code }}
+      KIOSK_VERSION_NAME: ${{ inputs.version_name }}
+      KIOSK_RELEASE_APK: incoming/release.apk
+      RELEASE_APK_URL: ${{ inputs.apk_url }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
         with:
-          python-version: "3.12"
-
-      - name: Download Android Platform Tools (Windows)
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+      - name: Install verifier
+        run: sdkmanager 'build-tools;36.0.0'
+      - name: Download and verify release APK
         run: |
-          curl -L -o platform-tools.zip "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
-          Expand-Archive -Path platform-tools.zip -DestinationPath . -Force
-          Remove-Item platform-tools.zip
-
-      - name: Verify pre-built APK
+          case "$RELEASE_APK_URL" in https://*) ;; *) echo 'HTTPS APK URL required' >&2; exit 1;; esac
+          mkdir -p incoming
+          curl --fail --location --proto '=https' --proto-redir '=https' --output "$KIOSK_RELEASE_APK" "$RELEASE_APK_URL"
+          bash tools/verify-release-apk.sh "$KIOSK_RELEASE_APK"
+      - name: Download Android Platform Tools
         run: |
-          if (Test-Path "build/CU-Denver-Equity-Kiosk.apk") {
-            Write-Host "Using pre-built APK"
-          } else {
-            Write-Error "No pre-built APK found. Build it first (bash build-apk.sh) and commit build/CU-Denver-Equity-Kiosk.apk"
-            exit 1
-          }
-
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-
-      - name: Build Windows .exe
-        run: |
-          pyinstaller --onefile --windowed --name "CU-Denver-Equity-Kiosk-Manager" `
-            --add-data "platform-tools;platform-tools" `
-            --add-data "build/CU-Denver-Equity-Kiosk.apk;." `
-            kiosk-manager.py
-
-      - name: Upload EXE artifact
-        uses: actions/upload-artifact@v7
+          curl --fail --location --output platform-tools.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+          unzip -o platform-tools.zip -d .
+      - name: Package verified APK
+        run: bash package-win.sh
+      - uses: actions/upload-artifact@v7
         with:
           name: Windows-EXE
           path: dist/CU-Denver-Equity-Kiosk-Manager.exe
           retention-days: 30
-
-      # Rolling "latest" release — always keeps the newest .exe downloadable
-      # from the repo's Releases page, no tag or PR required.
-      - name: Publish rolling latest release (push to main/master)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: latest
-          name: Latest build
-          body: |
-            Latest Windows build of the CU Denver Equity Kiosk Manager.
-            Built automatically from the latest commit on main/master.
-            Download `CU-Denver-Equity-Kiosk-Manager.exe` below, double-click it,
-            connect the tablet via USB, and click **Setup Kiosk**.
-          files: dist/CU-Denver-Equity-Kiosk-Manager.exe
-          fail_on_unmatched_files: true
-
-      # Versioned release — attach the .exe when a version tag is pushed.
-      - name: Create versioned GitHub Release (on version tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/CU-Denver-Equity-Kiosk-Manager.exe
-          generate_release_notes: true
+          if-no-files-found: error

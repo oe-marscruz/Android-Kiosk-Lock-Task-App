@@ -24,3 +24,18 @@ desktop.ini
 /tmp/
 *.zip
 *.tmp
+
+# Signing material must never be committed or bundled.
+.local-signing/
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.pass
+*.password
+.env
+.env.*
+build/development/
+build/release/

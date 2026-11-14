@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.webkiosk.session7tests">
+    <application android:label="Kiosk session seven tests" android:testOnly="true"
+        android:allowBackup="false" android:usesCleartextTraffic="false" />
+    <instrumentation android:name="com.example.webkiosk.session7tests.SessionResetDeviceTest"
+        android:targetPackage="com.example.webkiosk.session7fixture" android:functionalTest="true" />
+</manifest>

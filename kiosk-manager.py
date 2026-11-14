@@ -2,60 +2,36 @@
 CU Denver Equity - Kiosk Manager GUI
 A simple tool for non-technical users to set up and manage the kiosk tablet.
 """
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-import subprocess
 import os
 import sys
+import bundle_resources
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--check-bundle"]:
+    sys.exit(bundle_resources.main(sys.argv[2:]))
+
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+import queue
 import threading
 
+import package_policy
+import provisioning
+
 # ---------- paths (support PyInstaller runtime + macOS) ----------
-if getattr(sys, 'frozen', False):
-    BASE_DIR = sys._MEIPASS
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR, ADB, APK = bundle_resources.resource_paths()
 
 EXE_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
 
-# Platform-specific ADB binary
-if sys.platform == "darwin":
-    ADB = os.path.join(BASE_DIR, "platform-tools", "adb")
-elif sys.platform == "win32":
-    ADB = os.path.join(BASE_DIR, "platform-tools", "adb.exe")
-else:
-    ADB = os.path.join(BASE_DIR, "platform-tools", "adb")
-
-# APK: bundled inside .exe when frozen, alongside when running as script
-if getattr(sys, 'frozen', False):
-    APK = os.path.join(BASE_DIR, "CU-Denver-Equity-Kiosk.apk")
-else:
-    APK = os.path.join(EXE_DIR, "build", "CU-Denver-Equity-Kiosk.apk")
-PACKAGE = "com.example.webkiosk"
-DPC_PACKAGE = PACKAGE
-DPC = "com.example.webkiosk/.KioskDeviceAdminReceiver"
-
-
-def run_cmd(cmd, timeout=30):
-    """Run a command and return (stdout, stderr, returncode)."""
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=timeout, shell=True)
-        return r.stdout, r.stderr, r.returncode
-    except subprocess.TimeoutExpired:
-        return "", "Command timed out", 1
-    except Exception as e:
-        return "", str(e), 1
-
-
-def adb(cmd_args, timeout=30):
-    """Run an ADB command."""
-    return run_cmd(f'"{ADB}" {cmd_args}', timeout)
+PACKAGE_STATE = package_policy.default_state_path()
 
 
 # ---------- GUI ----------
 class KioskManager:
     def __init__(self):
         self.root = tk.Tk()
+        self._events = queue.Queue()
+        self._busy = False
+        self.client = provisioning.AdbClient(ADB)
         self.root.title("CU Denver Equity - Kiosk Manager")
         self.root.geometry("620x520")
         self.root.minsize(500, 420)
@@ -100,6 +76,13 @@ class KioskManager:
                                        font=("Segoe UI", 9), fg="#666")
         self.status_details.pack(anchor="w")
 
+        self.device_var = tk.StringVar()
+        self.device_choice = ttk.Combobox(
+            self.status_frame, textvariable=self.device_var, state="readonly", width=38,
+        )
+        self.device_choice.pack(side="left", fill="x", expand=True)
+        ttk.Button(self.status_frame, text="Refresh devices", command=self.check_status).pack(side="left")
+
         # ---------- buttons ----------
         self.btn_frame = ttk.Frame(self.root)
         self.btn_frame.pack(pady=10)
@@ -108,7 +91,7 @@ class KioskManager:
                    command=self.setup_kiosk, width=20).pack(side="left", padx=5)
         ttk.Button(self.btn_frame, text="🔓  Exit Kiosk",
                    command=self.exit_kiosk, width=20).pack(side="left", padx=5)
-        ttk.Button(self.btn_frame, text="📱  Restore All Apps",
+        ttk.Button(self.btn_frame, text="📱  Restore Setup Changes",
                    command=self.restore_all_apps, width=20).pack(side="left", padx=5)
 
         # ---------- remote management ----------
@@ -167,21 +150,69 @@ class KioskManager:
         self.instr.pack(pady=(0, 10))
         self._tk_widgets.append(self.instr)
 
+        self.root.after(50, self._drain_events)
         self.check_status()
         self.root.mainloop()
 
     # ---------- helpers ----------
+    def _ui(self, callback, *args):
+        self._events.put((callback, args))
+
+    def _drain_events(self):
+        try:
+            while True:
+                callback, args = self._events.get_nowait()
+                callback(*args)
+        except queue.Empty:
+            pass
+        self.root.after(50, self._drain_events)
+
     def log_add(self, text):
+        if threading.current_thread() is not threading.main_thread():
+            self._ui(self.log_add, text)
+            return
         self.log.insert("end", text + "\n")
         self.log.see("end")
-        self.root.update_idletasks()
 
     def set_status(self, text, detail="", color="#000"):
         self.status_label.config(text=text, fg=color)
         self.status_details.config(text=detail)
 
     def run_in_thread(self, target, *args):
-        threading.Thread(target=target, args=args, daemon=True).start()
+        if self._busy:
+            self.log_add("An operation is already running. Wait for its result.")
+            return
+        self._busy = True
+
+        def run():
+            try:
+                target(*args)
+            except Exception as exc:
+                self.log_add(f"Operation failed: {exc}")
+                self._ui(messagebox.showerror, "Operation Failed", str(exc))
+            finally:
+                self._ui(self._operation_finished)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _operation_finished(self):
+        self._busy = False
+
+    def _with_device(self, action, operation):
+        serial = self.device_var.get() or None
+
+        def run():
+            try:
+                device = self.client.select(serial)
+                self.log_add(f"{action}: selected tablet {device.serial}")
+                operation(device)
+            except (provisioning.ProvisioningError, package_policy.PackagePolicyError, OSError) as exc:
+                self.log_add(f"{action} failed: {exc}")
+                self._ui(self.set_status, action + " failed", str(exc), "#c00")
+                self._ui(messagebox.showerror, action + " Failed",
+                         str(exc) + "\n\nDevice changes may be partial. Inspect before retrying.")
+
+        self.run_in_thread(run)
 
     # ---------- fullscreen ----------
     def toggle_fullscreen(self):
@@ -343,176 +374,71 @@ class KioskManager:
 
     # ---------- actions ----------
     def check_status(self):
-        def _check():
-            self.log_add("--- Checking device status ---")
-            out, err, rc = adb("devices")
-            lines = [l for l in out.splitlines() if l.strip() and "List" not in l]
-            if not lines:
-                self.set_status("❌ No device connected",
-                                "Plug in the tablet via USB and enable USB Debugging.",
-                                "#c00")
-                self.log_add("No device found.")
-                return
-            device_line = lines[0]
-            if "unauthorized" in device_line:
-                self.set_status("⚠️  Device unauthorized",
-                                "Tap 'Allow' on the tablet screen.", "#e67e00")
-                return
-            self.set_status("✅ Device connected",
-                            device_line.split()[0], "#1a7a1a")
-            self.log_add(f"Connected: {device_line}")
+        def check():
+            try:
+                rows = self.client.devices()
+            except provisioning.ProvisioningError:
+                self._ui(self._show_devices, [])
+                raise
+            self._ui(self._show_devices, rows)
+        self.run_in_thread(check)
 
-            # check lock task allowlist
-            out, err, rc = adb("shell dumpsys device_policy 2>nul | findstr \"LockTaskPolicy\"")
-            if "com.example.webkiosk" in out:
-                self.log_add("Kiosk app is allowlisted. ✅")
-            else:
-                self.log_add("Kiosk app NOT allowlisted yet.")
-
-        self.run_in_thread(_check)
+    def _show_devices(self, rows):
+        ready = [row.serial for row in rows if row.state == "device"]
+        current = self.device_var.get()
+        self.device_choice.configure(values=ready)
+        if current not in ready:
+            self.device_var.set(ready[0] if len(ready) == 1 else "")
+        detail = "; ".join(f"{row.serial}: {row.state}" for row in rows)
+        self.set_status(
+            "Select a tablet" if len(ready) > 1 else ("Tablet connected" if ready else "No authorized tablet"),
+            detail or "Connect USB and accept the debugging prompt.",
+        )
 
     def setup_kiosk(self):
-        def _setup():
-            self.log_add("\n=== SETTING UP KIOSK ===")
-
-            # Step 1: check device
-            self.log_add("[1/6] Checking connection...")
-            out, err, rc = adb("devices")
-            if "device" not in out or "unauthorized" in out:
-                self.log_add("ERROR: Device not ready. Connect tablet and accept prompt.")
-                messagebox.showerror("Error", "Device not connected or unauthorized.\nConnect USB and accept the debugging prompt.")
-                return
-
-            # Step 2: install kiosk APK (must be installed before device owner)
-            self.log_add("[2/6] Installing kiosk APK...")
-            if not os.path.exists(APK):
-                self.log_add(f"APK not found: {APK}")
-                self.log_add("Run setup-kiosk.bat first to build the APK.")
-                messagebox.showerror("Error", "APK not found.\nRun setup-kiosk.bat to build it first.")
-                return
-            out, err, rc = adb(f'install -r "{APK}"')
-            if "Success" in out:
-                self.log_add("APK installed successfully. ✅")
-            elif "UPDATE_INCOMPATIBLE" in err:
-                self.log_add("Signature mismatch, reinstalling...")
-                adb(f"uninstall {PACKAGE}")
-                out2, err2, rc2 = adb(f'install "{APK}"')
-                if "Success" in out2:
-                    self.log_add("APK reinstalled. ✅")
-                else:
-                    self.log_add(f"Install failed: {err2}")
-
-            # Step 3: set the kiosk app as device owner
-            self.log_add("[3/6] Setting kiosk app as device owner...")
-            out, err, rc = adb(f"shell dpm set-device-owner {DPC}")
-            if "Success" in out or "already" in err.lower():
-                self.log_add("Device owner OK. ✅")
-            else:
-                self.log_add(f"Note: {err.strip() or out.strip()}")
-                self.log_add("If Test DPC was the previous device owner, you may need to factory reset first.")
-
-            # Step 4: set custom launcher as default home
-            self.log_add("[4/6] Setting kiosk launcher as default home...")
-            out, err, rc = adb(
-                "shell cmd package set-home-activity"
-                " com.example.webkiosk/com.example.kiosklauncher.LauncherActivity")
-            if rc == 0:
-                self.log_add("Custom launcher set as home. ✅")
-            else:
-                self.log_add("Note: launcher may already be set.")
-
-            # Step 5: hide non-essential apps
-            self.log_add("[5/6] Securing app drawer — hiding non-essential apps...")
-            out, err, rc = adb(
-                "shell pm query-activities --brief"
-                " -a android.intent.action.MAIN"
-                " -c android.intent.category.LAUNCHER")
-            if rc == 0:
-                hidden = 0
-                for line in out.splitlines():
-                    if line.strip().startswith("com."):
-                        pkg = line.strip().split("/")[0]
-                        if pkg not in (PACKAGE, "com.google.android.deskclock"):
-                            adb(f"shell pm disable-user --user 0 {pkg}")
-                            hidden += 1
-                self.log_add(f"  {hidden} apps hidden from app drawer. ✅")
-                self.log_add("  Keeping: Kiosk, Clock.")
-            else:
-                self.log_add("  Could not query app drawer.")
-
-            # Step 6: verify lock task allowlist
-            self.log_add("[6/6] Checking lock task allowlist...")
-            out, err, rc = adb("shell dumpsys device_policy 2>nul | findstr \"LockTaskPolicy\"")
-            if PACKAGE in out:
-                self.log_add("Kiosk app is allowlisted for lock task mode. ✅")
-                if "com.android.chrome" in out:
-                    self.log_add("Chrome is allowlisted. ✅")
-                else:
-                    self.log_add("Chrome not allowlisted yet — open the kiosk app once to apply the allowlist.")
-                if "com.android.settings" in out:
-                    self.log_add("WiFi settings are allowlisted. ✅")
-                else:
-                    self.log_add("WiFi settings not allowlisted yet — open the kiosk app once to apply the allowlist.")
-            else:
-                self.log_add("App NOT allowlisted — open the kiosk app once so it can configure lock task mode.")
-
-            self.log_add("\n=== DONE ===")
-            self.log_add("Tap 'CU Denver Equity' on the tablet to enter kiosk mode.")
-            self.check_status()
-            messagebox.showinfo("Setup Complete",
-                                "Kiosk is ready!\n\n"
-                                "On the tablet, tap 'CU Denver Equity' to enter\n"
-                                "kiosk mode. Chrome and WiFi settings can now\n"
-                                "run in lock task mode.")
-
-        self.run_in_thread(_setup)
+        def run(device):
+            provisioning.setup(device, APK, PACKAGE_STATE, self.log_add)
+            self._ui(self.set_status, "Setup verified", device.serial, "#1a7a1a")
+            self._ui(messagebox.showinfo, "Setup Complete",
+                     f"Owner, Home, required apps and active managed lock task verified on {device.serial}.")
+        self._with_device("Setup", run)
 
     def exit_kiosk(self):
-        def _exit():
-            self.log_add("\n=== EXITING KIOSK MODE ===")
-            self.log_add("Stopping kiosk app...")
-            out, err, rc = adb(f"shell am force-stop {PACKAGE}")
-            self.log_add("App stopped. Tablet should return to home screen. ✅")
-            self.log_add("To fully remove: Settings > Security > Device Admin Apps > deactivate the kiosk app")
-            self.check_status()
-            messagebox.showinfo("Kiosk Exited",
-                                "The kiosk app has been stopped.\n\n"
-                                "Your tablet should be back to normal.")
-
-        self.run_in_thread(_exit)
+        def run(device):
+            provisioning.exit_kiosk(device)
+            self.log_add(f"Lock task exit verified on {device.serial}. Device-owner policy remains installed.")
+            self._ui(messagebox.showinfo, "Kiosk Exited",
+                     f"Lock task is inactive on {device.serial}. Device-owner policy remains installed.")
+        self._with_device("Exit", run)
 
     def restore_all_apps(self):
-        """Re-enable all apps that were hidden."""
+        if self._busy:
+            return
         if not messagebox.askyesno(
-            "Restore All Apps",
-            "This will re-enable ALL previously hidden apps\n"
-            "(Chrome, Settings, Play Store, YouTube, etc.).\n\n"
-            "Use this after exiting kiosk mode to return\n"
-            "the tablet to normal use.\n\n"
-            "Continue?",
-            icon="info"):
+            "Restore Setup Changes",
+            "Restore only optional apps changed by this tool on the selected tablet? "
+            "Apps already disabled before setup remain disabled.",
+        ):
             return
 
-        def _restore():
-            self.log_add("\n=== RESTORING ALL APPS ===")
-            out, err, rc = adb("shell pm list packages -d")
-            count = 0
-            for line in out.splitlines():
-                if line.startswith("package:"):
-                    pkg = line[8:].strip()
-                    adb(f"shell pm enable {pkg}")
-                    count += 1
-            self.log_add(f"Re-enabled {count} apps. ✅")
-            self.log_add("App drawer is fully restored.")
-            self.check_status()
-            messagebox.showinfo("Apps Restored",
-                                f"{count} apps have been re-enabled.\n\n"
-                                "The tablet app drawer is back to normal.")
-
-        self.run_in_thread(_restore)
+        def run(device):
+            device.require_primary_user()
+            result = package_policy.restore_package_policy(device.run, PACKAGE_STATE, device.serial)
+            if result.failures:
+                raise provisioning.ProvisioningError("Restoration failed: " + ", ".join(result.failures))
+            self.log_add(f"Restored {len(result.changed)} setup change(s) on {device.serial}.")
+            self._ui(messagebox.showinfo, "Setup Changes Restored",
+                     f"Restored {len(result.changed)} setup change(s) on {device.serial}.")
+        self._with_device("Restore", run)
 
     def setup_remote_mgmt(self):
         """Guide user through Android Management API enrollment."""
+        if self._busy:
+            return
+        serial = self.device_var.get()
+        if not serial:
+            messagebox.showerror("Select Tablet", "Select the target serial before enrollment.")
+            return
         # Step 1: show instructions
         if not messagebox.askyesno(
             "Remote Management Setup",
@@ -548,12 +474,12 @@ class KioskManager:
             self.log_add("Setup cancelled.")
             return
 
-        self.log_add(f"Token received: {token[:20]}...")
+        self.log_add("Enrollment token received.")
 
         # Step 4: factory reset the tablet
         if not messagebox.askyesno(
             "Factory Reset Required",
-            "The tablet must be factory reset to enroll\n"
+            f"Tablet {serial} must be factory reset to enroll\n"
             "in Android Management API.\n\n"
             "This will erase ALL data on the tablet.\n\n"
             "A QR code will be displayed on this screen\n"
@@ -563,11 +489,11 @@ class KioskManager:
             self.log_add("Remote setup cancelled.")
             return
 
-        self.log_add("Factory resetting tablet...")
-        adb("shell recovery --wipe_data")
-
-        # Step 5: show QR code
-        self.show_enrollment_qr(token)
+        def enroll(device):
+            device.run(["shell", "recovery", "--wipe_data"])
+            self.log_add(f"Reset request accepted on {device.serial}; completion is unconfirmed.")
+            self._ui(self.show_enrollment_qr, token)
+        self._with_device("Enrollment reset", enroll)
 
     def prompt_for_token(self):
         """Open a dialog to paste the enrollment token."""
@@ -651,64 +577,26 @@ class KioskManager:
                   width=12).pack(pady=10)
 
     def factory_reset(self):
-        """Factory reset the tablet - wipes everything."""
+        if self._busy:
+            return
+        serial = self.device_var.get()
+        if not serial:
+            messagebox.showerror("Select Tablet", "Select and verify the target serial before requesting a reset.")
+            return
         if not messagebox.askyesno(
-            "⚠ FACTORY RESET — ARE YOU SURE?",
-            "This will permanently ERASE ALL DATA on the tablet:\n\n"
-            "  • All apps will be removed\n"
-            "  • All accounts will be deleted\n"
-            "  • All settings will be reset\n"
-            "  • Device owner will be cleared\n\n"
-            "The tablet will reboot and return to the\n"
-            "initial setup screen (like when it was new).\n\n"
-            "This CANNOT be undone.\n\n"
-            "Are you absolutely sure you want to continue?",
-            icon="warning"):
+            "Factory Reset", f"Permanently erase ALL data on tablet {serial}? This cannot be undone.",
+            icon="warning",
+        ):
+            return
+        if not messagebox.askyesno("Final Warning", f"Erase tablet {serial} now?", icon="error"):
             return
 
-        # second confirmation
-        if not messagebox.askyesno(
-            "⚠ FINAL WARNING",
-            "This is your last chance to cancel.\n\n"
-            "Tap 'Yes' ONLY if you are certain you\n"
-            "want to factory reset this tablet.",
-            icon="error"):
-            return
-
-        def _reset():
-            self.log_add("\n=== FACTORY RESET ===")
-            self.log_add("⚠ Wiping tablet — this takes about 2-5 minutes...")
-
-            # Method 1: recovery --wipe_data (works on most devices)
-            self.log_add("Sending wipe command...")
-            out, err, rc = adb("shell recovery --wipe_data")
-            self.log_add(out.strip() if out.strip() else "Command sent.")
-
-            if rc != 0 or "not found" in (out + err).lower():
-                # Method 2: broadcast MASTER_CLEAR (works on many newer devices)
-                self.log_add("Trying alternate method...")
-                out, err, rc = adb(
-                    "shell am broadcast -a android.intent.action.MASTER_CLEAR "
-                    "-n android/com.android.server.MasterClearReceiver"
-                )
-                self.log_add(out.strip() if out.strip() else "Broadcast sent.")
-
-            if rc != 0:
-                # Method 3: reboot to recovery (user must navigate manually)
-                self.log_add("Trying reboot to recovery...")
-                out, err, rc = adb("reboot recovery")
-                self.log_add(
-                    "Tablet is rebooting to recovery mode.\n"
-                    "On the tablet screen, use the volume buttons to navigate\n"
-                    "to 'Wipe data/factory reset' and press the power button\n"
-                    "to select it."
-                )
-
-            self.log_add("\nFactory reset initiated. The tablet will reboot shortly.")
-            self.log_add("After reboot, you'll need to set up the tablet from scratch.")
-            self.check_status()
-
-        self.run_in_thread(_reset)
+        def reset(device):
+            device.run(["shell", "recovery", "--wipe_data"])
+            self.log_add(f"Reset request accepted on {device.serial}; completion is unconfirmed.")
+            self._ui(messagebox.showinfo, "Reset Requested",
+                     f"Request accepted on {device.serial}. Verify completion on the tablet.")
+        self._with_device("Reset", reset)
 
 
 # ---------- entry ----------
