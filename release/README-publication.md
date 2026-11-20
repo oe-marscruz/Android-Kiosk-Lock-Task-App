@@ -7,7 +7,7 @@ This is how CI decides whether a build is published. It implements ARCHITECTURE.
 **Nothing.**
 - Windows signing isn't configured, and RFC 3161 validation isn't implemented yet (see [TODO](#todo)). So no `.exe` qualifies for the only public release path.
 - No verified private destination exists, so internal uploads are suppressed. The log says: `internal upload suppressed: no verified private destination`.
-- No workflow uploads Actions artifacts. Artifacts in a public repo aren't private.
+- PR runs upload debug test artifacts as described below; artifacts in a public repo aren't private.
 
 The legacy `latest` release and its asset are left untouched. No workflow creates, edits or deletes the `latest` tag. The README's `/releases/latest/download/...` link still serves that legacy build. Retiring it is a separate, user-authorized step.
 
@@ -31,8 +31,8 @@ Each platform runs as a single job: build, sign (Windows), verify, classify, the
 - **Mutation steps.** Each one checks its step-output allow flag, `github.event_name == 'push'` and the exact ref. The public release step also rechecks the final digest immediately before it publishes.
 - **Permissions.**
   - The default is `contents: read`.
-  - `build-exe.yml` calls `windows-candidate.yml` twice. Only the job that runs on a `v*` tag push gets `contents: write`.
-  - Secrets are mapped to `env` and never tested in `if:`.
+  - `build-exe.yml` calls `windows-candidate.yml` for PR, non-tag and tag runs. Only the job that runs on a `v*` tag push gets `contents: write`.
+  - Only the tag-push release job uses the `release-signing` environment and references signing secrets. Dispatch, branch pushes and PRs build debug APKs and unsigned EXEs.
 
 ## Matrix (as implemented)
 
@@ -50,14 +50,18 @@ These rows are narrower than §7.2:
 
 The versioned release sets `make_latest: false`, so the README's `/releases/latest` selector keeps pointing at the legacy build.
 
+## Signing environment setup (operator action)
+
+Create the protected GitHub environment `release-signing`, restrict its deployment branches and tags to `v*` tags, and configure required reviewers. Add the Android keystore and Windows signing secrets listed below as environment secrets, then delete their repository-level copies. GitHub environment protection is configured outside these workflows; the workflows cannot enforce these settings. Verify the restrictions and reviewers before enabling signing.
+
 ## Repository variables and secrets
 
 | Name | Kind | Purpose |
 |---|---|---|
-| `KIOSK_KEYSTORE_B64`, `KIOSK_KEYSTORE_PASS`, `KIOSK_KEYSTORE_ALIAS` | secret | Release-sign the APK (§7.1). Without them the APK is debug. |
+| `KIOSK_KEYSTORE_B64`, `KIOSK_KEYSTORE_PASS`, `KIOSK_KEYSTORE_ALIAS` | environment secret | Release-sign the APK (§7.1). Without them the APK is debug. |
 | `KIOSK_CERT_SHA256` | variable | Approved release signer fingerprint. Required for a release APK to count as `release`. |
-| `WINDOWS_SIGNING_CERTIFICATE` | secret | Base64 PFX. If present, the EXE is signed with `/fd SHA256 /tr <url> /td SHA256`. |
-| `WINDOWS_SIGNING_PASSWORD` | secret | PFX password. |
+| `WINDOWS_SIGNING_CERTIFICATE` | environment secret | Base64 PFX. If present, the EXE is signed with `/fd SHA256 /tr <url> /td SHA256`. |
+| `WINDOWS_SIGNING_PASSWORD` | environment secret | PFX password. |
 | `WINDOWS_TIMESTAMP_URL` | variable | RFC 3161 timestamp server. Required when signing. |
 | `WINDOWS_SIGNER_THUMBPRINT` | variable | Pinned signer thumbprint. Required when signing; a mismatch fails. |
 | `PRIVATE_ARTIFACT_DESTINATION` | variable | Restricted internal upload target. **Not used yet:** no verifier exists, so it's treated as unverified and nothing uploads. |

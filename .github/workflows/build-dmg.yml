@@ -48,23 +48,8 @@ jobs:
           java-version: "17"
 
       - name: Build APK from source (Gradle)
-        env:
-          # Same-repo PRs would otherwise receive secrets; PR builds stay debug.
-          KIOSK_KEYSTORE_B64: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_B64 || '' }}
-          KIOSK_KEYSTORE_PASS: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_PASS || '' }}
-          KIOSK_KEYSTORE_ALIAS: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_ALIAS || '' }}
-          KIOSK_CERT_SHA256: ${{ vars.KIOSK_CERT_SHA256 }}
         run: |
           set -euo pipefail
-          if [ -n "$KIOSK_KEYSTORE_B64" ]; then
-            export KIOSK_KEYSTORE="$RUNNER_TEMP/kiosk-release.keystore"
-            trap 'rm -f "$KIOSK_KEYSTORE"' EXIT
-            umask 077
-            printf '%s' "$KIOSK_KEYSTORE_B64" | base64 --decode > "$KIOSK_KEYSTORE"
-          else
-            unset KIOSK_KEYSTORE_PASS KIOSK_KEYSTORE_ALIAS
-          fi
-          unset KIOSK_KEYSTORE_B64
           bash build-apk-mac.sh
           mkdir -p dist/build
           cp build/CU-Denver-Equity-Kiosk.apk build/apk-info.txt dist/build/

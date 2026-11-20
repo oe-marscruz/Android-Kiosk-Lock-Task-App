@@ -30,21 +30,9 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/windows-candidate.yml
-    secrets:
-      KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
-      KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
-      KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
-      WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
-      WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
 
   release:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
     uses: ./.github/workflows/windows-candidate.yml
-    secrets:
-      KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
-      KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
-      KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
-      WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
-      WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
