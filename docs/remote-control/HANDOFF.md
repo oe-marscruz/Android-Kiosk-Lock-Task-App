@@ -16,9 +16,9 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 - [x] 9 fixes (fixes/H01–H09.md) merged into ARCHITECTURE v0.4; reconciliation in §9
 - [x] P0 review #4: FAIL with 1 blocker (remote exit). Remote exit removed from v1; I02–I06 merged into v0.5
 - [x] P0 review #5: **PASS-WITH-CHANGES, so the gate is passed** (reviews/P0-review-5.md)
-- [ ] Should-fix J01–J05 (Terra fixers), folded in before the P1a freeze
+- [x] Should-fix J01–J05 merged into ARCHITECTURE v0.6, the P1a freeze baseline
+- [ ] P1b publication gate (in progress, Claude agent, shared checkout)
 - [x] P1 Gradle migration and signing/upgrade safety (b53269e), plus setup-kiosk.bat no-uninstall fix (9b6946e)
-- [ ] P1b publication gate (must merge before any P3/P4 code)
 - [ ] P1a contract freeze (record the reviewed commit ID here)
 - [ ] P2 relay security
 - [ ] P3 relay routing and desktop

@@ -1,13 +1,14 @@
 # Remote Staff Control: Architecture (v0.5)
 
-Status: **v0.5, P0 GATE PASSED** (review #5: PASS-WITH-CHANGES). Should-fix items J01–J05 are being folded in for the P1a freeze.
+Status: **v0.6, P0 GATE PASSED** (review #5: PASS-WITH-CHANGES). Should-fix items J01–J05 are merged. This is the baseline for the P1a freeze.
 
 | Version | Review | Result | Fixes |
 |---|---|---|---|
 | v0.1 | #1 | FAIL | F01–F12 |
 | v0.2 | #2 | FAIL | G01–G09 |
 | v0.3 | #3 | FAIL | H01–H09 |
-| v0.4 | #4 | FAIL (1 blocker: remote exit) | I02–I06, plus remote `exit_kiosk` removed from v1. Merged here |
+| v0.4 | #4 | FAIL (1 blocker: remote exit) | I02–I06, plus remote `exit_kiosk` removed from v1 |
+| v0.5 | #5 | **PASS-WITH-CHANGES** | J01–J05, merged here |
 
 The sources are in `reviews/` and `fixes/`, and §9 records how the lead reconciled them. No remote implementation merges until GPT-6.2-sol passes the review gate. P1, the Gradle migration (`b53269e`), has landed on the feature branch.
 
@@ -20,7 +21,7 @@ The sources are in `reviews/` and `fixes/`, and §9 records how the lead reconci
 | IdP | **Duo SSO**, used as an OIDC IdP through a Generic OIDC RP, in front of Oracle Cloud. P5a uses a user-owned Duo trial in `trial` mode with a local relay. P5b uses CU's tenant in `production` mode, changing configuration only. |
 | Delivery | Work goes on the fork `oe-marscruz/...`, and PRs target `TriBrigadeMars/master`. |
 | Support policy | **Attended-only** by default: a person at the tablet must opt in locally before staff can see content or send input. The Equity office must confirm this (§8). |
-| v1 scope | One staff attachment per tablet. Kiosk-window capture uses accessibility only, with projection off. `navigate` and **`exit_kiosk` are reserved and always denied**. Exiting kiosk mode stays a supervised local USB action (`exit-kiosk.bat`), and remote exit is deferred to v2 (Appendix A). Staff login and wipe each have their own gate, and both default to off. Device scope comes from a principal mapping only. |
+| v1 scope | One staff attachment per tablet. Kiosk-window capture uses accessibility only, with projection off. `navigate`, **`enter_kiosk` and `exit_kiosk` are reserved and always denied**. Exiting and re-entering kiosk mode are supervised local USB actions (§2.2), and remote exit is deferred to v2 (Appendix A). Staff login and wipe each have their own gate, and both default to off. Device scope comes from a principal mapping only. |
 
 ## 2. Components
 
@@ -133,7 +134,7 @@ class SecurityServices(Protocol):
     - There is no email fallback.
   - `DEVICE_AUTH_AUDIENCE`, and `REMOTE_SUPPORT_POLICY` = `attended_only` (default) or `status_admin`.
   - `DESTRUCTIVE_ACTIONS_ENABLED=false` gates wipe. Enabling it requires P5b fresh-factor evidence.
-  - There is no exit gate in v1. `exit_kiosk` is denied no matter what the configuration says.
+  - There is no exit gate in v1. `enter_kiosk` and `exit_kiosk` are denied no matter what the configuration says. v1 has no USB maintenance marker and no remotely controlled maintenance window.
   - Limits: `CMD_QUEUE_MAX=32`, `CMD_RATE_PER_S=20`, `CMD_DEADLINE_S=5`, `LEASE_IDLE_S=60`, `APPROVAL_TIMEOUT_S=60`, `GRANT_MAX_S=300`, `SESSION_ABS_H=8`, `SESSION_IDLE_MIN=30`, `FRAME_MAX_AGE_MS=1000`, `FRAME_RING=8`, `CMD_TRANSIT_BUDGET_MS=1000`, `ACK_RESULT_WINDOW_S` (a bounded window for late acks).
 - **Logging.**
   - The Caddy log uses `format filter` with `request>uri delete`, `request>headers delete` and `resp_headers delete`.
@@ -191,7 +192,7 @@ class SecurityServices(Protocol):
   - **Grant window.** When the person taps Allow, the grant is a fixed window of `elapsedRealtime() + GRANT_MAX_S` (300 s), and the tablet reports the remaining time in `support_granted`. The relay sets its own deadline from that report. Neither substantive ops, lease renewal nor a same-mode attach extends the grant. Once it expires, staff need a new kiosk attachment and a fresh local approval.
   - **Terminal events.**
     - When a lease expires, in either mode, the tablet sends `attachment_expired{attachment_id, reason:"lease_expired"}`.
-    - When a grant expires or the person presses Stop, it sends `support_stopped{attachment_id, reason:"grant_expired"|"local_stop"}`.
+    - When a grant expires, Stop is pressed, or any boundary invalidation happens, it sends `support_stopped{attachment_id, reason}`, using a reason from the closed registry (§4).
     - The tablet cleans up locally first and doesn't retry delivery after a disconnect.
     - The relay applies these events under the device lock. A duplicate or stale event is harmless.
   - Disconnect clears all attachment state. Stale or expired IDs are never revived.
@@ -237,6 +238,25 @@ class SecurityServices(Protocol):
   - **Re-checking on resume.** On every resume, recheck the boot count, task ID, task root, allowlist and `LOCKED` state, and match the ID against `ActivityManager.getAppTasks()` / `AppTask.getTaskInfo()`. A global `LOCKED` state alone never proves ownership. Never stop a task whose ownership is unverified. If the ownership invariant can't be re-established, report a recovery failure; supervised recovery is required.
   - The cached `mInLockTask` flag is removed.
   - At the WebView history root, Back stays inside the kiosk, and `exitToHome()` is unreachable from Back.
+- **Supervised USB exit and re-entry (v1).** A person stays at the tablet throughout.
+  - **Exit.**
+    - Connect an authorized USB host and select the intended device.
+    - Run `exit-kiosk.bat` or the manager's Exit Kiosk action. Both force-stop `com.example.webkiosk`, and neither writes a marker.
+    - Verify that the global lock-task state is `NONE`. A force-stop or a success message on its own is **not** proof that the tablet has left lock task.
+    - Neither exit nor Restore All Apps removes Device Owner. Never use Device Admin deactivation to exit.
+  - **Re-entry.**
+    - Unlock the tablet, then run `adb -s <serial> shell am start -a android.intent.action.MAIN -c android.intent.category.HOME -n com.example.webkiosk/com.example.kiosklauncher.LauncherActivity`.
+    - HOME launches `MainActivity` through the controlled transition. Verify `LOCKED`, the same resumed root and task ID, the persisted identity checked against `getAppTasks()`, and `status.owner_verified=true`. A global `LOCKED` on its own is not enough.
+    - If any check fails, keep the tablet supervised and report a recovery failure.
+  - **Script changes (P4).**
+    - `exit-kiosk.bat` and `kiosk-manager.py` must:
+      - select one authorized device
+      - check ADB and force-stop failures
+      - verify `NONE`
+      - report failures rather than claiming success unconditionally
+      - drop the Device Admin deactivation advice
+      - print the re-entry command and its checks
+    - Restore All Apps must report its enumeration and per-package failures, and warn that it enables **every** disabled package.
 - **`remote/AdminCommandHandler`** maps a fixed set of ops to DPM calls. There is no shell access.
 - **Isolation and navigation.**
   - Staff SSO never runs on the tablet. `ALLOWED_DOMAINS` (`ucdenver.edu`, `cm.maxient.com`, label-bounded subdomains) is unchanged.
@@ -256,15 +276,16 @@ class SecurityServices(Protocol):
   - There is no unverified retry. A test CA can only be loaded through a separate test bundle.
 - **`kiosk_remote/client.py`** is the WSS client. Its first message is `staff_auth`.
 - **`kiosk_remote/viewer.py`** shows the attachment state, the frames, kiosk Back/Home, and admin buttons according to role.
-  - **Display boundary:** for each frame, the viewer goes through these steps:
-    1. disable input
-    2. decode the frame
-    3. on the Tk thread, **recheck that the attachment and grant are still current and live**
-    4. install and commit the frame
-    5. send `frame_displayed{attachment_id, grant_id, frame_id, generation}`
-    6. enable input
+  - **Display boundary.** Viewer state and invalidation are serialized on the **Tk thread**. WSS events from the asyncio thread go into a thread-safe queue that `root.after` polls, and decoded results are marshalled back the same way. For each frame:
+    1. On Tk, disable input.
+    2. Decode off the UI thread.
+    3. On Tk, check that the attachment and grant are current and live.
+    4. Commit the frame as the displayed reference.
+    5. Send `frame_displayed{attachment_id, grant_id, frame_id, generation}` without blocking.
+    6. On Tk, **recheck** that the attachment and grant are still live, and that the displayed reference is still this frame.
+    7. Only if every check passes, enable input.
     
-    Late frames for a released, stale or replaced attachment or grant are rejected.
+    If the send fails, the display is invalidated and input stays disabled. Late frames for a released, stale or replaced attachment or grant are rejected. A delayed decode or continuation can't revive an invalidated or replaced attachment or grant.
   - Any invalidation clears the displayed reference and disables input, including while a decode or commit is still pending.
   - Clicks in the letterbox are rejected.
 - The existing USB/ADB features remain. A failed USB install never triggers an uninstall: `kiosk-manager.py` was fixed in P1 and `setup-kiosk.bat` in `9b6946e`.
@@ -343,18 +364,35 @@ All auth responses, the loopback page included, send `Cache-Control: no-store` a
   - Tombstones keep the verifier for a bounded window so the tablet can learn the final outcome.
 - **Activation.** **Finish** runs the WSS proof below. The relay moves `approved → active` atomically only if the proof is valid and the original TTL hasn't passed. If `device_ready` is lost, a status of `active` plus a fresh proof recovers it. Retries use fresh challenges and stay within both deadlines.
 - **Durable state (crash safety).**
-  - One app-private SharedPreferences file holds **either** an unfinished marker `{attempt_id, alias, request_id?}` **or** an active credential `{device_id, alias}`. A single in-process owner serializes all reads and writes. Every transition uses `Editor.commit()`, never `apply()`. Writes happen off the UI thread.
-  - Neither the status secret nor the private key is ever stored there.
-  - **Commit sequence:**
-    1. After Start, commit the marker `{attempt_id, alias}` **before** generating the key or sending any request.
-    2. After `POST /enroll/requests` succeeds, commit the `request_id`. A lost response counts as "the request may exist".
-    3. On a matching `device_ready`, a single `commit()` writes `{device_id, alias}` and removes the marker.
-    4. Only after that commit returns true does the panel show **Active**, send `hello` or allow remote use. If the commit fails or its result is uncertain, the tablet closes the socket and recovers from durable state.
-  - **Restart:** process death closes the panel and loses the secret. The tablet blocks remote use and any new enrollment until the marker is resolved.
-    - **Crash before the request was dispatched:** delete the alias, verify it with `containsAlias`, then retire the marker.
-    - **Crash after dispatch, including after proof but before the credential commit:** the relay may already show the device as `active`. Delete the alias, keeping the fingerprint where it's available, and put the device into **durable quarantine**. An authorized admin must then locate the request (by ID, fingerprint or inventory), confirm it's absent or terminal, and revoke any active identity. Only after that is the quarantine cleared. It is never cleared automatically.
-    - **Crash after the credential commit:** start normal device authentication with the alias.
-  - A crash in the middle of a commit recovers to the complete old record or the complete new record, never a mix of the two.
+  - **The record.** One app-private SharedPreferences file holds **either** an unfinished marker `{attempt_id, alias, request_may_exist: bool, fingerprint?, request_id?, quarantined: bool}` **or** an active credential `{device_id, alias}`.
+    - The fingerprint is the SHA-256 of the DER SPKI, in the display format.
+    - The status secret and the private key are never stored in this record.
+    - A single in-process owner serializes all access. Every write uses a synchronous `Editor.commit()` off the UI thread, never `apply()`.
+    - If a commit fails or its result is uncertain, the socket is closed and recovery starts from durable state.
+  - **Commit order after Start:**
+    1. Marker with `request_may_exist=false` and `quarantined=false`, before the key is generated.
+    2. Generate the key, then commit its **fingerprint**.
+    3. Commit `request_may_exist=true` **before** attempting `POST /enroll/requests`. This flag is never reverted.
+    4. After a successful response, commit `request_id`.
+    5. On a matching `device_ready`, atomically commit `{device_id, alias}` and remove the marker. Only then: show Active, send `hello`, and allow remote use.
+  - **Restart**, decided only from the durable record. While a marker exists, remote use and new enrollment are blocked.
+
+| Durable state | Recovery |
+|---|---|
+| Marker, `request_may_exist=false` | Dispatch is ruled out. Preserve the fingerprint if it's missing, delete the alias, verify `containsAlias` is false, then remove the marker. If any step fails, keep the marker and retry |
+| Marker, `request_may_exist=true` | A dispatch, or even a proof, may have happened. Commit `quarantined=true`, preserve the fingerprint before deleting the alias, and verify the deletion. Keep the marker until an authorized reconciliation is done |
+| Missing, invalid or inconsistent marker | Fail closed and quarantine. If the device can't be identified, keep the marker for an administrator to investigate |
+| Complete credential, no marker | Normal device authentication. Don't delete the alias |
+
+  - **Ground rules.**
+    - A crash in the middle of a commit leaves either the complete old record or the complete new one.
+    - An alias is never deleted before its fingerprint has been durably saved.
+    - An unauthenticated status or a generic WSS failure never clears quarantine.
+- **Supervised quarantine reconciliation.**
+  - **Trigger.** A separate supervised USB trigger, behind the same `DUMP`, action, no-extras, Device Owner, sender and focus checks as enrollment, opens a **quarantine panel**. It shows the full fingerprint and the request ID if there is one. It can't start enrollment.
+  - **Desktop side.** At the tablet, the admin compares the fingerprint, then runs `POST /enroll/reconcile` (§3.4) from the desktop and watches it succeed.
+  - **Clearing.** The admin then physically taps **Clear quarantine**. The tablet rechecks the same marker and confirms the alias is absent, then removes the marker. The tablet never accepts the relay's response directly as authorization.
+  - **When it stays quarantined.** A failure, a changed marker, a missing fingerprint, or an offline or uncertain result leaves the quarantine in place.
 - **Cleanup.**
   - **When.** On cancel, focus loss, process death, expiry, rejection or key replacement.
   - **Marker first.** This is the durable marker described above.
@@ -393,12 +431,11 @@ All auth responses, the loopback page included, send `Cache-Control: no-store` a
 | `detach`, `lease_renew` | viewer | status/kiosk | * | * | Owning session plus the current `attachment_id` |
 | frames, `frame_displayed` | viewer | kiosk | G | * | After the banner and boundary checks |
 | `tap`, `swipe`, `long_press`, `kiosk_back`, `kiosk_home`, `reload_kiosk` | operator | kiosk | G | * | Coordinate ops also need a valid frame binding (§4) |
-| `lock_now`, `reboot`, `enter_kiosk` | admin | kiosk | G | * | Allowed |
+| `lock_now`, `reboot` | admin | kiosk | G | * | Allowed |
 | `kiosk_home`, `reload_kiosk` | operator | status | N | `status_admin` | Allowed |
 | `lock_now`, `reboot` | admin | status | N | `status_admin` | Allowed |
-| `enter_kiosk` | admin | status | N | * | **Only** while a maintenance window is active |
 | `wipe` | admin | kiosk | G | * | `DESTRUCTIVE_ACTIONS_ENABLED`, confirmation, and a step-up consumed at dispatch |
-| `exit_kiosk` | — | — | — | — | **Denied in v1** (reserved; see Appendix A) |
+| `enter_kiosk`, `exit_kiosk` | — | — | — | — | **Denied in v1** (reserved; see Appendix A) |
 | enrollment list, assign, approve, reject | admin | — | — | * | §3.4 |
 | device revoke, scope reassignment | admin | — | — | * | In scope. Reassignment needs authority over both groups |
 | session revoke | admin | — | — | * | Only if the target's whole current scope is within the admin's |
@@ -499,6 +536,7 @@ All auth responses, the loopback page included, send `Cache-Control: no-store` a
 | `GET /audit?cursor&limit` | admin | `200 {items:[AuditEvent…], next_cursor}` |
 | `POST /devices/<device_id>/revoke` | admin; `{}` | `200 {device_id, state:"revoked"}` |
 | `POST /sessions/<session_id>/revoke` | admin; `{}` | `200 {session_id, state:"revoked"}` |
+| `POST /enroll/reconcile` | admin; `{fingerprint, request_id?}` | `200 {fingerprint, request_id?, outcome:"cleared"}`. Clearance is returned **only** after an authoritative search by fingerprint, matching the request ID if one is given. Every match must be in the admin's live scope and confirmed absent or terminal, or else revoked through the normal fencing. The search is serialized against enrollment and activation, and fingerprint tombstones are kept. A mismatch, ambiguity, an incomplete inventory or an out-of-scope match never clears. If the audit write fails, everything rolls back. The operation is idempotent |
 | `POST /auth/logout` | own session; `{}` | `200 {state:"logged_out"}` |
 | §3.1 and §3.3 auth and step-up routes | as specified | |
 
@@ -533,7 +571,7 @@ Every message uses the envelope `{"v":1,"type":…,"id":…}`. Replies echo the 
   - `attach_open{attachment_id, mode, display_name?, lease_ms}`, `lease_renewed{attachment_id, lease_ms}`, `detach{attachment_id}`
   - `frame_displayed`
   - `cmd{id, command_id, attachment_id, op, args, deadline_ms, grant_id?, frame_id?, generation?}`
-  - `reserve{command_id, op:"wipe", attachment_id, ttl_ms}`, `execute{reservation_id}`
+  - `reserve{command_id, op:"wipe", attachment_id, ttl_ms}`, `execute{reservation_id, command_id, attachment_id}`
 - **Device → relay.**
   - `hello`
   - `status{lock_task_state, owner_verified, destination_id|null, battery, wifi, caps}`. No URL is ever included.
@@ -560,7 +598,7 @@ Every message uses the envelope `{"v":1,"type":…,"id":…}`. Replies echo the 
   - Validation, invalidation and dispatch are serialized.
   - `dispatchGesture` only reports submission. The callback decides the outcome; if there is none, the result is `OUTCOME_UNKNOWN`.
   - A display ack for an older or unknown frame can't roll the reference back.
-- **Other ops.** `kiosk_back`, `kiosk_home`, `reload_kiosk`, `lock_now`, `reboot`, `enter_kiosk` and `wipe` take no arguments. `navigate` and `exit_kiosk` are reserved and always denied (`DISABLED_BY_POLICY`). `enter_kiosk` is a no-op unless a maintenance window opened locally (by USB) is active.
+- **Other ops.** `kiosk_back`, `kiosk_home`, `reload_kiosk`, `lock_now`, `reboot` and `wipe` take no arguments. `navigate`, `enter_kiosk` and `exit_kiosk` are reserved and always denied (`DISABLED_BY_POLICY`).
 - **Wipe reservation.** Wipe is two-phase. It doesn't depend on synchronized clocks or on a transit bound.
   1. **Reserve.** After normal authorization, and before the step-up is consumed, the relay sends `reserve{…, ttl_ms}`. `ttl_ms` is no more than the remaining command deadline.
      - The tablet checks the kiosk attachment, lease, grant and policy, and deduplicates the request.
@@ -579,6 +617,52 @@ Every message uses the envelope `{"v":1,"type":…,"id":…}`. Replies echo the 
      - If the outcome is uncertain, it is `OUTCOME_UNKNOWN`.
   
   Ordinary commands keep the receipt-relative `deadline_ms` and the transit assumption.
+- **Wipe transitions** for one `(attachment_id, command_id)`. Every relay writer check and send holds the §2.1 device lock. A failure before the send is never `OUTCOME_UNKNOWN`.
+
+| Transition | Writer check | Consume step-up | Mark dispatch | Intent audit | Deadline recheck |
+|---|---|---|---|---|---|
+| admitted → reserve_sent | Rebuild the live context: session, role, scope, device, socket, attachment, lease, grant, maintenance, gate | No | No | No | Before the send. `ttl_ms` and the send timeout are both capped at the remaining budget |
+| reserve_sent → reserved | Match the authenticated connection, both IDs and the reservation | No | No | No | A response at or after the relay deadline is rejected |
+| reserved → execute_committing | Repeat the live checks. The reservation must match. Validate and consume the step-up atomically | **Yes, once** | No | No | Before consumption |
+| execute_committing → execute_sent | Runs after the audit write succeeds | Already consumed | **Correlation is registered before the send attempt** | **Yes, before the recheck** | **After the audit write**, recheck the session, lease, grant and command deadlines. The send timeout is capped at the remaining budget. If the budget is ≤0, nothing is sent |
+| execute_sent → terminal | The ack must come from the original authenticated connection and match both IDs | No | Already registered | Outcome recorded | The tablet checks its reservation expiry immediately before dispatch |
+| any earlier state → terminal | Denial, expiry, disconnect, a failed consumption or a failed audit prevents the execute | Consumed only if consumption already succeeded. Never restored | No | Only if the audit write succeeded | Expiry → `rejected_expired`, anything else → `failed` |
+
+  - **What `execute_sent` means.** It means a send was *attempted*, including one that failed or stalled. If the send fails or stalls, the socket is closed.
+  - **Ack mapping.**
+    - A definitive success → `ok`.
+    - `RESERVATION_EXPIRED` → `rejected_expired`.
+    - Any other negative ack → `failed`.
+    - Only an attempted execute that never gets a definitive ack is `OUTCOME_UNKNOWN`.
+  - **Plain wipe commands.** The relay never emits a plain `cmd{op:"wipe"}`, and the tablet rejects one without dispatching it.
+  - **Tablet-side `execute` checks.**
+    - The tablet checks `execute{reservation_id, command_id, attachment_id}` against the reservation and the connection.
+    - If the reservation has expired or is unknown, the tablet sends `ack{command_id, attachment_id, ok:false, err:"RESERVATION_EXPIRED"}` and doesn't wipe.
+    - A duplicate `execute` never dispatches twice.
+  - **Late acks.** A late ack from the original connection after `OUTCOME_UNKNOWN` only reconciles the audit record.
+- **Terminal reasons** for `support_stopped` and `attachment_ended`. This is a closed registry. The desktop shows a fixed local string and never page content.
+
+| Reason | Origin | Desktop shows |
+|---|---|---|
+| `local_stop` | tablet | Support stopped locally |
+| `grant_expired` | tablet or relay | Support approval expired |
+| `lease_expired` | tablet or relay | Attachment expired |
+| `focus_lost` | tablet | Kiosk lost focus |
+| `obscured` | tablet | Kiosk obscured |
+| `sensitive_state` | tablet | Kiosk unavailable for sharing (also covers unknown states) |
+| `geometry_changed` | tablet | Kiosk view changed (also covers navigation, page load and URL generation) |
+| `banner_lost` | tablet | Support banner unavailable |
+| `suspend` / `screen_off` | tablet | Tablet suspended / screen off |
+| `service_failure` | tablet | Tablet service unavailable |
+| `enrollment_opened` | tablet | Enrollment opened |
+| `detached` / `disconnected` | relay | Attachment ended / Connection lost |
+| `revoked` | relay | Access revoked (also covers session end and device revocation) |
+| `policy_changed` | relay | Support policy changed (also covers scope, role or policy changes) |
+
+  - **Validation.** The relay checks each tablet reason against its permitted origin, and rejects unknown reasons.
+  - **Races.** The first serialized terminal transition wins.
+  - **Stale IDs.** Stale or duplicate IDs never affect a replacement attachment.
+  - **Connection loss** clears the viewer, whether or not a terminal event arrives.
 - **Admission.**
   - Queues and dedup are scoped to `(attachment_id, command_id)` on both the relay and the tablet, with atomic reservation and outcomes retained for the attachment's lifetime.
     - A duplicate returns the recorded outcome.
@@ -592,7 +676,7 @@ Every message uses the envelope `{"v":1,"type":…,"id":…}`. Replies echo the 
   - Auth and policy: `UNAUTHENTICATED`, `FORBIDDEN`, `SESSION_EXPIRED`, `DISABLED_BY_POLICY`, `DEVICE_AUTH_FAILED`.
   - Attachment and grant: `LEASE_BUSY`, `LEASE_REQUIRED`, `GRANT_REQUIRED`, `ATTACHMENT_STALE`, `GRANT_STALE`.
   - Frame binding: `FRAME_UNKNOWN`, `FRAME_NOT_DISPLAYED`, `FRAME_EXPIRED`, `GENERATION_STALE`, `GESTURE_OUT_OF_BOUNDS`.
-  - Admission and delivery: `OVERLOADED`, `DEADLINE_EXCEEDED`, `DUPLICATE_ID_CONFLICT`, `OUTCOME_UNKNOWN`, `DISCONNECTED`.
+  - Admission and delivery: `OVERLOADED`, `DEADLINE_EXCEEDED`, `DUPLICATE_ID_CONFLICT`, `OUTCOME_UNKNOWN`, `DISCONNECTED`, `RESERVATION_EXPIRED` (also valid as a negative-ack `err`).
   - Message validity: `UNSUPPORTED`, `INVALID_MESSAGE`.
   
   Errors never contain secrets, URLs, args or stack traces.
@@ -719,10 +803,10 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
   5. Provision Device Owner and lock task.
   6. Re-enroll.
 - **Upgrade acceptance (K11).**
-  1. Record the owner, allowlist, key fingerprint and task identity.
-  2. Run `install -r` with a higher version, both normally and **during maintenance**, then reboot.
-  3. Confirm the owner and allowlist are unchanged and that ownership was re-established through the controlled path. Confirm maintenance was cancelled and recovered, and that the **same** key signs a fresh challenge.
-  4. Install an incompatibly signed APK and confirm it fails without an uninstall.
+  1. Record the device, the installed version and signer, the Device Owner, the allowlist, the task identity and the device-key fingerprint.
+  2. On a locked tablet, use the matching signer to `adb install -r` a higher version, then reboot. Verify that the owner and allowlist are unchanged and that the controlled ownership is re-established, with `LOCKED` and `status.owner_verified=true`. Verify that the **same** key signs a fresh challenge.
+  3. On a separate fixture, do the supervised USB exit (§2.2) and verify `NONE`. Then `install -r` the higher version while the tablet is exited. Reboot, do the supervised re-entry, and run the ownership checks again. Verify the owner, allowlist and key.
+  4. Attempt an incompatibly signed upgrade and confirm that it fails without uninstalling.
 
 ### 7.2 Publication gate (P1b)
 - **Classification.** Each candidate is classified on three axes: capability (`usb-only` or `remote-capable`), APK (`release` or `debug`), and Windows exe (`authenticode-signed` or `unsigned`).
@@ -746,24 +830,42 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
     A legacy-only timestamp fails. Neither SignTool's verbose output nor `TimeStamperCertificate` proves the protocol type.
   - **Evidence** is bound to the EXE digest.
   - A signing failure never falls back to unsigned.
-- **Default-deny matrix.** Only the following are allowed, and everything else is denied. Denial covers every `actions/upload-artifact` call, every other upload, release creation and editing, and asset deletion.
+- **Default-deny matrices.** Each platform is evaluated **independently**, after its own classification and verification. A denial on one platform doesn't deny the other. Everything not listed is denied: every artifact or other upload, release creation or edit, and asset deletion, including from helpers and post-actions.
 
-| Event and ref | Windows class | Windows mutation | macOS class | macOS mutation |
-|---|---|---|---|---|
-| `push` to the default branch | usb / debug / unsigned | Restricted internal upload | usb / debug | Restricted internal upload |
-| `push` to the default branch | usb / release / signed | Labelled public prerelease, never `latest` | usb / release, remote / release | Restricted internal upload |
-| `push` of `refs/tags/v*` | usb / release / signed | Labelled versioned release | usb / debug, usb / release, remote / release | Restricted internal upload |
-| `push` of `refs/tags/v*` | remote / release / signed, plus all remote gates (P0, P5b, §5.7, fleet upgrade, §7.3) bound to commit and digest | Labelled versioned release, never `latest` | — | — |
-| `pull_request`, `workflow_dispatch`, any other event or ref, any other class | any | **Deny** | any | **Deny** |
+| Windows event and ref | Class | Allowed mutation |
+|---|---|---|
+| `push`, default branch | usb / debug / unsigned | Restricted internal upload |
+| `push`, default branch | usb / release / signed | Labelled public prerelease |
+| `push`, `refs/tags/v*` | usb / release / signed | Labelled versioned release |
+| `push`, `refs/tags/v*` | remote / release / signed | Labelled versioned release, only with P0, P5b, §5.7, fleet-upgrade and §7.3 gates bound to the commit and final digest |
 
-  - **Internal destination.** "Restricted internal upload" requires `PRIVATE_ARTIFACT_DESTINATION`, which must point to an independently access-restricted private destination. If it is unset, invalid, inaccessible or unverified, **nothing is uploaded**. Actions artifacts in this public repo are not private.
-  - **`classify` job.** A `classify` job runs after the final candidate has been built and verified. It emits explicit allow outputs only if every check passed.
-  - **Mutation steps.** Each publishing job directly `needs: classify`. Every upload or release step also checks its own allow output, `github.event_name` and the exact ref.
-    - Example: `needs.classify.result == 'success' && needs.classify.outputs.windows_prerelease == 'true' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)`.
-    - Only the eligible release job gets `contents: write`.
-    - The job publishes exactly the verified bytes.
-  - **Secrets.** PR jobs get no secrets and no write permission. Secrets are never tested directly in `if:`.
-- **Legacy asset.** Retiring the legacy public `latest` asset is a **separately authorized operation**: a dedicated workflow behind a protected environment that requires approval. Normal builds never delete or replace it. Until then, the asset and its links stay as they are, and they aren't described as a verified current release.
+| macOS event and ref | Class | Allowed mutation |
+|---|---|---|
+| `push`, default branch or `refs/tags/v*` | usb / debug or usb / release | Restricted internal upload |
+| `push`, default branch or `refs/tags/v*` | remote / release | Restricted internal upload, **only after P0 and §5.7 pass**, bound to the commit and final DMG digest |
+
+  - **No public DMG.** There are no public DMG releases. A remote debug build is denied on both platforms.
+  - **What's denied.** PRs, `workflow_dispatch`, unknown classes, failed or missing checks, and every unlisted case are all denied.
+  - **Internal uploads** need a verified, independently access-restricted `PRIVATE_ARTIFACT_DESTINATION`. If it's unset or invalid, nothing is uploaded.
+- **Candidate handoff.** The final bytes stay in the eligible job.
+  - Build, sign, verify, classify and publish all happen in **one job per platform**.
+  - Step outputs default to deny.
+  - Each mutation step checks:
+    - its own allow output
+    - that verification succeeded
+    - `github.event_name`
+    - the exact ref
+    - the final digest, immediately before the mutation
+  - No artifact upload is ever used as a handoff between jobs.
+  - Only an eligible release job gets `contents: write`.
+  - PRs get no secrets and no write permission.
+  - Secrets are never tested directly in `if:`.
+- **Release names.**
+  - **The `latest` tag.** The old workflow publishes a release tagged **`latest`**. Normal builds never edit, replace or delete it. Retiring it is a separately authorized operation: a protected environment that requires approval.
+  - **The `latest` selector.** GitHub's `/releases/latest/download/<asset>` URL, which the README uses, is a **selector**. It picks the newest release that isn't a draft or prerelease.
+    - A labelled prerelease never becomes "latest".
+    - A versioned `v*` release can, and it then redirects the README link even though the legacy tag stays untouched.
+    - If the selected release doesn't have the named asset, the link fails. It doesn't fall back to the legacy asset.
 
 ### 7.3 Windows release gate (P6)
 - **Acceptance images.** CU IT provides and maintains `CU-WIN10-<build>` and `CU-WIN11-<build>`, both x64.
@@ -790,10 +892,10 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 
 ## 8. Open questions for the user / stakeholders (not blocking P1a drafting)
 1. **Equity office:** Do you approve `attended_only` as the default? Do you want `status_admin` (unattended reload, home, lock and reboot)? Which states can be shared, and which workflows are sensitive? Is the banner wording acceptable?
-2. **Fleet signing and the public download:** Which keys signed the deployed tablets? (The §7.1 inventory will answer this.) Under the default-deny matrix (§7.2), once P1b lands, new debug builds **stop publishing publicly**. They go only to a private destination, and if none is configured they go nowhere. **Decisions needed:**
-   - Where should internal test builds go (a private repo, an internal share, or none)?
-   - Should the existing public `latest` `.exe` and its README link be retired? Retiring them is a separate approved operation.
-3. **Remote exit (scope cut):** v1 denies remote `exit_kiosk`. Exiting kiosk mode stays a local USB action. Do you accept deferring remote exit to v2 (Appendix A)?
+2. **Fleet signing and the public download:** Which keys signed the deployed tablets? (The §7.1 inventory answers this.) After P1b, new debug builds **stop publishing publicly**. They go only to a verified private destination, and nowhere if none is configured. Every internal USB-debug artifact carries this warning: "**Debug APK, not a fleet release. Each CI run may use a different signing key, so updates to existing installations can fail. Do not uninstall or reset to force an update. Inventory the installed signer and follow supervised recovery.**" Windows artifacts add "**Unsigned executable.**" **Decisions needed:**
+   - Where should internal test builds go?
+   - Should the legacy `latest` tag, its asset and the README `/releases/latest` link be retired or kept? The link's target can change once any versioned release is published.
+3. **Remote exit and re-entry (scope cut):** v1 denies remote `exit_kiosk` and `enter_kiosk`. Both are supervised local USB actions. Do you accept deferring remote exit to v2 (Appendix A)?
 4. **Windows code signing:** Does CU have an Authenticode identity?
 5. **CU OIT (P5b):** We need the issuer, the RP registration (callback `https://<relay>/auth/callback`), the `amr` values and what they mean, `auth_time`, confirmation that MFA is forced under `max_age=0` (including for remembered devices), and how bypass and skip are handled.
 6. **OCI:** What are the VM hostname and DNS, and who maintains them?
@@ -852,7 +954,7 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 
 **v0.5**
 - **Remote `exit_kiosk` removed from v1** (blocker #4.1). Revocable exact-alarm access can defeat the re-lock deadline, and no v1 gate can rule that out. `EXIT_KIOSK_ENABLED`, `SCHEDULE_EXACT_ALARM`, `MaintenanceAlarmReceiver` and the exit P3k evidence have all moved to Appendix A.
-  - `enter_kiosk` is kept, but only to end a maintenance window that was opened locally over USB.
+  - *(Superseded in v0.6: `enter_kiosk` is now also reserved and denied, and re-entry is supervised over USB.)*
   - The lock-task ownership work (§2.2) stays, because the P4 manifest switch still depends on it.
 - **I02, writer commit.** Admission validates and the writer commits, and the step-up is consumed only at the writer, never anywhere else. Management operations use the same deterministic lock order.
 - **I03, terminal messages and deadlines.**
@@ -864,6 +966,21 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 - **I04, frame fence.** Frames are fenced through publication on the tablet, relay and desktop. Late display acks are ignored.
 - **I05, enrollment durable state.** An uncertain activation goes to durable quarantine until an admin reconciles it, and is never cleared automatically.
 - **I06, publishing.** A default-deny publication matrix, a private destination that must be verified, separately authorized retirement of the legacy asset, a pinned Windows publisher, and per-signature RFC 3161 validation.
+
+**v0.6** (review #5 should-fix items, gate passed)
+- **J01, reserved ops.** `enter_kiosk` is reserved and denied, the same as `exit_kiosk`. The supervised USB exit and re-entry procedure and its verification are in §2.2. The §7.1 upgrade fixture no longer assumes a maintenance marker.
+- **J02, wipe states.** The wipe flow is a phase-by-phase table. Only `execute` consumes the step-up and audits. Deadlines are rechecked after the audit, and correlation is registered before the send attempt. `RESERVATION_EXPIRED` was added, and a plain wipe `cmd` is rejected on both sides.
+- **J03, termination reasons and viewer order.** A closed registry of terminal reasons, plus a serialized Tk viewer sequence with a recheck after `frame_displayed`.
+- **J04, crash-safe enrollment.**
+  - `request_may_exist` is committed before the POST, and the fingerprint is kept before the key is deleted.
+  - Recovery is driven by a table.
+  - There's a supervised quarantine panel, `POST /enroll/reconcile`, and a physical **Clear quarantine** tap.
+- **J05, publishing.**
+  - Windows and macOS each have their own matrix.
+  - Remote macOS staging is gated on P0 and §5.7.
+  - Each platform runs as a single job, with no cross-job handoff.
+  - The legacy `latest` tag is distinguished from the `/releases/latest` selector.
+  - The internal debug warning is restored.
 
 ## Appendix A. Remote `exit_kiosk` (deferred to v2; NOT implemented in v1)
 
