@@ -35,14 +35,27 @@ if not exist "build\CU-Denver-Equity-Kiosk.apk" (
     pause
     exit /b 1
 )
-"%ADB%" install -r "build\CU-Denver-Equity-Kiosk.apk" 2>&1 | findstr /i "Success\|INSTALL_FAILED_UPDATE_INCOMPATIBLE" >nul
-if errorlevel 1 (
-    echo [WARNING] Install may have failed. Trying uninstall first...
-    "%ADB%" uninstall com.example.webkiosk >nul 2>&1
-    "%ADB%" install "build\CU-Denver-Equity-Kiosk.apk"
-) else (
-    echo         Kiosk APK installed successfully.
+rem Never uninstall on failure: a Device Owner app cannot be removed, and a
+rem signer mismatch means this tablet needs the signer inventory/reprovisioning
+rem procedure (docs/remote-control/ARCHITECTURE.md section 7.1).
+"%ADB%" install -r "build\CU-Denver-Equity-Kiosk.apk" > "%TEMP%\kiosk-install.log" 2>&1
+findstr /i /c:"INSTALL_FAILED_UPDATE_INCOMPATIBLE" "%TEMP%\kiosk-install.log" >nul
+if not errorlevel 1 (
+    type "%TEMP%\kiosk-install.log"
+    echo [ERROR] The installed kiosk app was signed with a different key.
+    echo         Do NOT uninstall it. Record the installed signer and follow the
+    echo         reprovisioning procedure before continuing.
+    pause
+    exit /b 1
 )
+findstr /i /c:"Success" "%TEMP%\kiosk-install.log" >nul
+if errorlevel 1 (
+    type "%TEMP%\kiosk-install.log"
+    echo [ERROR] APK install failed. Setup stopped; nothing was uninstalled.
+    pause
+    exit /b 1
+)
+echo         Kiosk APK installed successfully.
 
 echo [3/4] Setting kiosk app as device owner...
 "%ADB%" shell dpm set-device-owner com.example.webkiosk/.KioskDeviceAdminReceiver 2>&1 | findstr /i "already\|Success" >nul
