@@ -13,6 +13,8 @@ import hashlib
 import os
 import re
 import subprocess
+import stat
+import struct
 import sys
 import tempfile
 import zipfile
@@ -96,7 +98,13 @@ def capability(remote_flag, hits):
 def dex_blobs(apk_bytes):
     import io
     with zipfile.ZipFile(io.BytesIO(apk_bytes)) as z:
-        return [z.read(n) for n in z.namelist() if re.fullmatch(r"classes\d*\.dex", n)]
+        names = [n for n in z.namelist() if re.fullmatch(r"classes\d*\.dex", n)]
+        if names.count("classes.dex") != 1 or len(names) != len(set(names)):
+            raise GateError("APK must contain exactly one classes.dex and no duplicate DEX entries")
+        blobs = [z.read(n) for n in names]
+        if any(not blob.startswith(b"dex\n") for blob in blobs):
+            raise GateError("APK contains an invalid DEX magic")
+        return blobs
 
 
 # ---------------------------------------------------------------- APK
@@ -188,8 +196,28 @@ def verify_apk_bytes(data, label, expected_sha, expected_signer):
 def read_pyinstaller(path):
     """(entry names incl. PYZ module names, {entry: bytes} of *.apk entries). Parses only."""
     from PyInstaller.archive.readers import CArchiveReader, pkg_archive_contents
-    reader = CArchiveReader(str(path))
+    class CheckedReader(CArchiveReader):
+        @classmethod
+        def _parse_toc(cls, data):
+            seen = set()
+            pos = 0
+            while pos < len(data):
+                if len(data) - pos < cls._TOC_ENTRY_LENGTH:
+                    raise GateError("truncated PyInstaller TOC")
+                length = struct.unpack_from(cls._TOC_ENTRY_FORMAT, data, pos)[0]
+                if length <= cls._TOC_ENTRY_LENGTH or pos + length > len(data):
+                    raise GateError("invalid PyInstaller TOC entry length")
+                name = data[pos + cls._TOC_ENTRY_LENGTH:pos + length].rstrip(b"\0").decode("utf-8")
+                if name in seen:
+                    raise GateError(f"duplicate PyInstaller TOC entry: {name}")
+                seen.add(name)
+                pos += length
+            return super()._parse_toc(data)
+
+    reader = CheckedReader(str(path))
     names = pkg_archive_contents(str(path), recursive=True)
+    if [n for n in reader.toc if n.lower().endswith(".apk")] != [APK_NAME]:
+        raise GateError(f"{path}: expected exactly one embedded {APK_NAME}")
     if not any(entry[4] == "z" for entry in reader.toc.values()):
         raise GateError(f"unknown PyInstaller layout in {path}: no PYZ archive")
     apks = {n: reader.extract(n) for n in reader.toc if n.lower().endswith(".apk")}
@@ -207,7 +235,13 @@ def inspect_dmg_tree(root):
     """root: the read-only mount of the final DMG."""
     root = Path(root)
     apps = [p for p in root.iterdir() if p.suffix == ".app" and p.is_dir()]
-    if len(apps) != 1 or not (root / "Kiosk-APK" / APK_NAME).is_file():
+    apk_dir = root / "Kiosk-APK"
+    apk_path = apk_dir / APK_NAME
+    try:
+        valid_apk = stat.S_ISDIR(os.lstat(apk_dir).st_mode) and stat.S_ISREG(os.lstat(apk_path).st_mode)
+    except OSError:
+        valid_apk = False
+    if len(apps) != 1 or not valid_apk:
         raise GateError(f"unknown DMG layout in {root}: need one .app and Kiosk-APK/{APK_NAME}")
     names, apks, archives = [], {}, 0
     for dirpath, dirnames, filenames in os.walk(root):
@@ -215,18 +249,20 @@ def inspect_dmg_tree(root):
             path = Path(dirpath, name)
             rel = path.relative_to(root).as_posix()
             names.append(rel)
+            if path.is_symlink() and path.resolve().suffix.lower() == ".apk":
+                raise GateError(f"symlink to APK in DMG: {rel}")
             if name.lower().endswith(".apk"):
-                if path.is_symlink() or not path.is_file() or name != APK_NAME:
+                if path.is_symlink() or not path.is_file() or path != apk_path:
                     raise GateError(f"unexpected APK entry in DMG: {rel}")
                 apks[rel] = path.read_bytes()
     for path in sorted((apps[0] / "Contents" / "MacOS").glob("*")):
-        if path.is_file() and not path.is_symlink():
+        if path.is_symlink() or not path.is_file():
+            raise GateError(f"invalid app executable: {path}")
+        if path.is_file():
             try:
                 inner, embedded = read_pyinstaller(path)
-            except GateError:
-                raise
-            except Exception:  # not a PyInstaller executable
-                continue
+            except Exception as e:
+                raise GateError(f"unreadable PyInstaller archive {path}: {e}") from e
             archives += 1
             names += inner
             for n, b in embedded.items():

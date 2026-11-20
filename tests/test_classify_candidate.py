@@ -1,6 +1,10 @@
 """Publication gate classifier and decision matrix (ARCHITECTURE.md §7.2, P1b)."""
 import importlib.util
 import itertools
+import io
+import struct
+import zipfile
+from unittest import mock
 import pathlib
 import tempfile
 import unittest
@@ -237,3 +241,69 @@ class PrTestArtifactTest(unittest.TestCase):
                 d = cc.decide("windows", event, ref, "main", "usb-only", "debug", "unsigned", base_ref="main")
                 self.assertFalse(d.pr_artifact, (event, ref))
 
+
+
+class PackageInspection(unittest.TestCase):
+    def apk(self, entries):
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            for name, content in entries:
+                archive.writestr(name, content)
+        return data.getvalue()
+
+    def test_dex_layout(self):
+        for entries in ([], [("classes.dex", b"invalid")]):
+            with self.assertRaises(cc.GateError):
+                cc.dex_blobs(self.apk(entries))
+        self.assertEqual(cc.dex_blobs(self.apk([("classes.dex", b"dex\n035\0")])), [b"dex\n035\0"])
+
+    def test_duplicate_raw_toc(self):
+        from PyInstaller.archive.readers import CArchiveReader
+        def entry(name, kind=b"b"):
+            name = name.encode() + b"\0"
+            return struct.pack(CArchiveReader._TOC_ENTRY_FORMAT, CArchiveReader._TOC_ENTRY_LENGTH + len(name), 0, 0, 0, 0, kind) + name
+        toc = entry(cc.APK_NAME) * 2
+        cookie = struct.pack(CArchiveReader._COOKIE_FORMAT, CArchiveReader._COOKIE_MAGIC_PATTERN,
+                             len(toc) + CArchiveReader._COOKIE_LENGTH, 0, len(toc), 311, b"python")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp, "app")
+            path.write_bytes(toc + cookie)
+            with self.assertRaisesRegex(cc.GateError, "duplicate"):
+                cc.read_pyinstaller(path)
+
+    def tree(self, tmp):
+        root = pathlib.Path(tmp)
+        macos = root / "Kiosk.app/Contents/MacOS"
+        macos.mkdir(parents=True)
+        (macos / "kiosk").write_bytes(b"bad archive")
+        apkdir = root / "Kiosk-APK"
+        apkdir.mkdir()
+        (apkdir / cc.APK_NAME).write_bytes(b"apk")
+        return root, apkdir
+
+    def test_symlinked_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, apkdir = self.tree(tmp)
+            target = root / "elsewhere"
+            apkdir.rename(target)
+            apkdir.symlink_to(target, target_is_directory=True)
+            with self.assertRaises(cc.GateError):
+                cc.inspect_dmg_tree(root)
+
+    def test_symlinked_apk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, apkdir = self.tree(tmp)
+            apk = apkdir / cc.APK_NAME
+            apk.unlink()
+            target = root / "target"
+            target.write_bytes(b"apk")
+            apk.symlink_to(target)
+            with self.assertRaises(cc.GateError):
+                cc.inspect_dmg_tree(root)
+
+    def test_unreadable_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _ = self.tree(tmp)
+            with mock.patch.object(cc, "read_pyinstaller", side_effect=OSError("unreadable")):
+                with self.assertRaisesRegex(cc.GateError, "unreadable"):
+                    cc.inspect_dmg_tree(root)
