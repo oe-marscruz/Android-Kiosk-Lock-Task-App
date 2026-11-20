@@ -27,43 +27,36 @@ jobs:
           Expand-Archive -Path platform-tools.zip -DestinationPath . -Force
           Remove-Item platform-tools.zip
 
-      - name: Build APK from source
-        # The release must always bundle an APK built from the CURRENT source,
-        # not a stale committed build/CU-Denver-Equity-Kiosk.apk.
-        # Set up JDK + Android SDK (mirrors setup-tools.bat), then run build-apk.sh.
-        shell: bash
-        run: |
-          set -e
-          # JDK 17
-          if [ ! -d "jdk/jdk-17.0.20+8" ]; then
-            mkdir -p jdk && cd jdk
-            curl -L -o jdk.zip "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse"
-            unzip -qo jdk.zip
-            cd ..
-          fi
-          # Android SDK command-line tools
-          if [ ! -d "android-sdk/cmdline-tools/latest" ]; then
-            curl -L -o cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip"
-            mkdir -p android-sdk/cmdline-tools
-            unzip -qo cmdline-tools.zip -d android-sdk/cmdline-tools
-            mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
-            rm cmdline-tools.zip
-          fi
-          export JAVA_HOME=$(ls -d jdk/jdk-*/)
-          export ANDROID_SDK_ROOT="$PWD/android-sdk"
-          # Accept licenses + install platform/build-tools (best-effort)
-          echo y | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null 2>&1 || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager.bat" --sdk_root="$ANDROID_SDK_ROOT" "platforms;android-35" "build-tools;35.0.0"
-          bash build-apk.sh
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
 
-      - name: Verify built APK
+      - name: Build APK from source (Gradle)
+        # The release must always bundle an APK built from the CURRENT source.
+        # Release-signed only when KIOSK_KEYSTORE_B64 is configured; otherwise
+        # debug-signed and labelled debug (ARCHITECTURE.md section 7.1).
+        shell: bash
+        env:
+          KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
+          KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
+          KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
+          KIOSK_CERT_SHA256: ${{ vars.KIOSK_CERT_SHA256 }}
         run: |
-          if (Test-Path "build/CU-Denver-Equity-Kiosk.apk") {
-            Write-Host "APK built from source"
-          } else {
-            Write-Error "APK build failed"
-            exit 1
-          }
+          set -euo pipefail
+          if [ -n "$KIOSK_KEYSTORE_B64" ]; then
+            export KIOSK_KEYSTORE="$RUNNER_TEMP/kiosk-release.keystore"
+            trap 'rm -f "$KIOSK_KEYSTORE"' EXIT
+            umask 077
+            printf '%s' "$KIOSK_KEYSTORE_B64" | base64 -d > "$KIOSK_KEYSTORE"
+          else
+            unset KIOSK_KEYSTORE_PASS KIOSK_KEYSTORE_ALIAS
+          fi
+          unset KIOSK_KEYSTORE_B64
+          bash build-apk.sh
+          variant=$(sed -n 's/^variant=//p' build/apk-info.txt)
+          echo "KIOSK_APK_VARIANT=$variant" >> "$GITHUB_ENV"
 
       - name: Install PyInstaller
         run: pip install pyinstaller
@@ -78,8 +71,10 @@ jobs:
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Windows-EXE
-          path: dist/CU-Denver-Equity-Kiosk-Manager.exe
+          name: Windows-EXE-${{ env.KIOSK_APK_VARIANT }}
+          path: |
+            dist/CU-Denver-Equity-Kiosk-Manager.exe
+            build/apk-info.txt
           retention-days: 30
 
       # Rolling "latest" release — always keeps the newest .exe downloadable
@@ -89,13 +84,16 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
-          name: Latest build
+          name: Latest build (${{ env.KIOSK_APK_VARIANT }} APK)
           body: |
             Latest Windows build of the CU Denver Equity Kiosk Manager.
+            Bundled kiosk APK: **${{ env.KIOSK_APK_VARIANT }}**-signed (see apk-info.txt).
             Built automatically from the latest commit on main/master.
             Download `CU-Denver-Equity-Kiosk-Manager.exe` below, double-click it,
             connect the tablet via USB, and click **Setup Kiosk**.
-          files: dist/CU-Denver-Equity-Kiosk-Manager.exe
+          files: |
+            dist/CU-Denver-Equity-Kiosk-Manager.exe
+            build/apk-info.txt
           fail_on_unmatched_files: true
 
       # Versioned release — attach the .exe when a version tag is pushed.
@@ -103,5 +101,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/CU-Denver-Equity-Kiosk-Manager.exe
+          name: ${{ github.ref_name }} (${{ env.KIOSK_APK_VARIANT }} APK)
+          files: |
+            dist/CU-Denver-Equity-Kiosk-Manager.exe
+            build/apk-info.txt
           generate_release_notes: true

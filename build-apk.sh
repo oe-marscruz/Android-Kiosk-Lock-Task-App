@@ -1,109 +1,62 @@
 #!/bin/bash
-# Build script for CU Denver Equity Kiosk APK
-set -e
+# Build the CU Denver Equity Kiosk APK with Gradle (Linux, macOS, Windows Git Bash).
+#
+# Release: set KIOSK_KEYSTORE, KIOSK_KEYSTORE_PASS and KIOSK_KEYSTORE_ALIAS
+#          (optionally KIOSK_CERT_SHA256 to pin the signer certificate).
+# Debug:   none of them set; signed with the local Android debug key.
+# A partial set is an error. NEVER commit a keystore or its password.
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -W)"
-SCRIPT_DIR="${SCRIPT_DIR//\\//}"
-
-JDK="$SCRIPT_DIR/jdk/jdk-17.0.20+8"
-SDK="$SCRIPT_DIR/android-sdk"
-BUILD_TOOLS="$SDK/build-tools/35.0.0"
-PLATFORM="$SDK/platforms/android-35"
-ANDROID_JAR="$PLATFORM/android.jar"
-
-OUT_DIR="$SCRIPT_DIR/build"
-GEN_DIR="$OUT_DIR/gen"
-OBJ_DIR="$OUT_DIR/obj"
-
-# Signing key. NEVER commit the keystore or its password. A release build
-# supplies them via the environment (e.g. CI secrets or local env vars);
-# fall back to a *locally generated* debug keystore only when none is set.
-KEYSTORE="${KIOSK_KEYSTORE:-$SCRIPT_DIR/local_debug.keystore}"
-KEYSTORE_PASS="${KIOSK_KEYSTORE_PASS:-android}"
-KEYSTORE_ALIAS="${KIOSK_KEYSTORE_ALIAS:-androiddebugkey}"
-
-APP_DIR="$SCRIPT_DIR/app/src/main"
-MANIFEST="$APP_DIR/AndroidManifest.xml"
-JAVA_SRC="$APP_DIR/java/com/example/webkiosk/MainActivity.java"
-WIFI_SRC="$APP_DIR/java/com/example/webkiosk/WifiSettingsActivity.java"
-DEVICE_ADMIN_SRC="$APP_DIR/java/com/example/webkiosk/KioskDeviceAdminReceiver.java"
-LAUNCHER_SRC="$APP_DIR/java/com/example/kiosklauncher/LauncherActivity.java"
-RES_DIR="$APP_DIR/res"
-
-APP_NAME="CU-Denver-Equity-Kiosk"
-
-JAVA_BIN="$JDK/bin"
-BUILD_TOOLS_BIN="$BUILD_TOOLS"
-
-echo "=== Cleaning ==="
-rm -rf "$OUT_DIR"
-mkdir -p "$GEN_DIR" "$OBJ_DIR"
-
-echo "=== Compiling resources ==="
-"$BUILD_TOOLS_BIN/aapt2" compile \
-  --dir "$RES_DIR" \
-  -o "$OBJ_DIR/resources.zip"
-
-echo "=== Linking resources ==="
-"$BUILD_TOOLS_BIN/aapt2" link \
-  -o "$OUT_DIR/$APP_NAME-unaligned.apk" \
-  -I "$ANDROID_JAR" \
-  --manifest "$MANIFEST" \
-  --java "$GEN_DIR" \
-  --min-sdk-version 21 \
-  --target-sdk-version 35 \
-  -R "$OBJ_DIR/resources.zip" \
-  --auto-add-overlay
-
-echo "=== Compiling Java ==="
-"$JAVA_BIN/javac" \
-  -d "$OBJ_DIR" \
-  -cp "$ANDROID_JAR" \
-  "$GEN_DIR/com/example/webkiosk/R.java" \
-  "$JAVA_SRC" \
-  "$WIFI_SRC" \
-  "$DEVICE_ADMIN_SRC" \
-  "$LAUNCHER_SRC"
-
-echo "=== Converting to DEX ==="
-"$JAVA_BIN/java" -cp "$BUILD_TOOLS_BIN/lib/d8.jar" com.android.tools.r8.D8 \
-  --lib "$ANDROID_JAR" \
-  --output "$OBJ_DIR" \
-  "$OBJ_DIR/com/example/webkiosk/"*.class \
-  "$OBJ_DIR/com/example/kiosklauncher/"*.class
-
-echo "=== Adding DEX to APK ==="
-cd "$OBJ_DIR"
-"$JAVA_BIN/jar" uf "$OUT_DIR/$APP_NAME-unaligned.apk" classes.dex
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== Aligning APK ==="
-"$BUILD_TOOLS_BIN/zipalign" -f -p 4 \
-  "$OUT_DIR/$APP_NAME-unaligned.apk" \
-  "$OUT_DIR/$APP_NAME-aligned.apk"
+APP_NAME="CU-Denver-Equity-Kiosk"
+OUT_DIR="$SCRIPT_DIR/build"
 
-echo "=== Signing APK ==="
-# Generate a keystore if it doesn't exist and none was supplied (persists
-# across builds, but is gitignored - never commit signing material).
-if [ ! -f "$KEYSTORE" ]; then
-  echo "=== Generating ${KEYSTORE##*/} ==="
-  "$JAVA_BIN/keytool" -genkey -v \
-    -keystore "$KEYSTORE" \
-    -alias "$KEYSTORE_ALIAS" \
-    -keyalg RSA -keysize 2048 -validity 10000 \
-    -storepass "$KEYSTORE_PASS" \
-    -keypass "$KEYSTORE_PASS" \
-    -dname "CN=Android Debug, O=Android, C=US"
+# Windows JVMs need C:/... paths; cygpath exists only under Git Bash/MSYS/Cygwin.
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}
+
+# Toolchains downloaded by setup-tools.bat / setup-tools-mac.sh, if not already configured.
+if [ -z "${JAVA_HOME:-}" ]; then
+  for candidate in "$SCRIPT_DIR"/jdk/Contents/Home "$SCRIPT_DIR"/jdk/jdk-*/Contents/Home "$SCRIPT_DIR"/jdk/jdk-*; do
+    if [ -x "$candidate/bin/java" ] || [ -x "$candidate/bin/java.exe" ]; then
+      export JAVA_HOME="$(native_path "$candidate")"
+      break
+    fi
+  done
+fi
+if [ -z "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ] && [ ! -f local.properties ] && [ -d "$SCRIPT_DIR/android-sdk" ]; then
+  export ANDROID_HOME="$(native_path "$SCRIPT_DIR/android-sdk")"
 fi
 
-"$JAVA_BIN/java" -jar "$BUILD_TOOLS_BIN/lib/apksigner.jar" sign \
-  --ks "$KEYSTORE" \
-  --ks-pass "pass:$KEYSTORE_PASS" \
-  --ks-key-alias "$KEYSTORE_ALIAS" \
-  --out "$OUT_DIR/$APP_NAME.apk" \
-  "$OUT_DIR/$APP_NAME-aligned.apk"
+set_count=0
+for var in KIOSK_KEYSTORE KIOSK_KEYSTORE_PASS KIOSK_KEYSTORE_ALIAS; do
+  [ -n "${!var:-}" ] && set_count=$((set_count + 1))
+done
+case "$set_count" in
+  3) VARIANT=release TASK=assembleRelease
+     export KIOSK_KEYSTORE="$(native_path "$KIOSK_KEYSTORE")" ;;
+  0) VARIANT=debug TASK=assembleDebug ;;
+  *) echo "ERROR: set all of KIOSK_KEYSTORE, KIOSK_KEYSTORE_PASS, KIOSK_KEYSTORE_ALIAS, or none." >&2
+     exit 1 ;;
+esac
+
+mkdir -p "$OUT_DIR"
+rm -f "$OUT_DIR/$APP_NAME.apk" "$OUT_DIR/apk-info.txt"
+
+echo "=== Building $VARIANT APK ==="
+bash ./gradlew --no-daemon "$TASK"
+
+GRADLE_OUT="$SCRIPT_DIR/app/build/outputs/apk/$VARIANT"
+cp "$GRADLE_OUT/app-$VARIANT.apk" "$OUT_DIR/$APP_NAME.apk"
+cp "$GRADLE_OUT/apk-info.txt" "$OUT_DIR/apk-info.txt"
 
 echo ""
-echo "=== SUCCESS ==="
+echo "=== SUCCESS ($VARIANT) ==="
+if [ "$VARIANT" = debug ]; then
+  echo "DEBUG-SIGNED APK: for development and USB testing only, never for fleet release."
+fi
 echo "APK ready: build/$APP_NAME.apk"
-ls -lh "$OUT_DIR/$APP_NAME.apk"
+cat "$OUT_DIR/apk-info.txt"

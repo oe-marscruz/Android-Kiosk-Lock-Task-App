@@ -15,6 +15,15 @@ build/obj/
 build/*-aligned.apk
 build/*-unaligned.apk
 build/*.idsig
+build/apk-info.txt
+build/reports/
+
+# Gradle / Android Studio
+app/build/
+.gradle/
+local.properties
+.idea/
+*.iml
 *.spec
 __pycache__/
 *.pyc

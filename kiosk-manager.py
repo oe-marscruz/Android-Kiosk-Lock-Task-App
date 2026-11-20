@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import subprocess
 import os
+import re
 import sys
 import threading
 
@@ -50,6 +51,25 @@ def run_cmd(cmd, timeout=30):
 def adb(cmd_args, timeout=30):
     """Run an ADB command."""
     return run_cmd(f'"{ADB}" {cmd_args}', timeout)
+
+
+def install_failure_message(out, err, rc):
+    """Classify `adb install -r` output: None on success, else a message for staff."""
+    text = f"{out}\n{err}"
+    if rc == 0 and "Success" in text and "Failure" not in text:
+        return None
+    if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in text:
+        reason = ("The kiosk app on this tablet is signed with a different key "
+                  "(INSTALL_FAILED_UPDATE_INCOMPATIBLE).")
+    else:
+        code = re.search(r"\bINSTALL_[A-Z_]+", text)
+        lines = text.strip().splitlines()
+        detail = code.group(0) if code else (lines[-1] if lines else f"adb exit code {rc}")
+        reason = f"APK install failed: {detail}"
+    return (reason + "\n\nSetup stopped. The app was NOT uninstalled: it is the "
+            "Device Owner and must not be removed.\nRecord this tablet in the signer "
+            "inventory and arrange supervised reprovisioning "
+            "(docs/remote-control/ARCHITECTURE.md section 7.1).")
 
 
 # ---------- GUI ----------
@@ -413,16 +433,12 @@ class KioskManager:
                 self.askbox("showerror", "Error", "APK not found.\nRun setup-kiosk.bat to build it first.")
                 return
             out, err, rc = adb(f'install -r "{APK}"')
-            if "Success" in out:
-                self.log_add("APK installed successfully. ✅")
-            elif "UPDATE_INCOMPATIBLE" in err:
-                self.log_add("Signature mismatch, reinstalling...")
-                adb(f"uninstall {PACKAGE}")
-                out2, err2, rc2 = adb(f'install "{APK}"')
-                if "Success" in out2:
-                    self.log_add("APK reinstalled. ✅")
-                else:
-                    self.log_add(f"Install failed: {err2}")
+            failure = install_failure_message(out, err, rc)
+            if failure:
+                self.log_add(f"ERROR: {failure}")
+                self.askbox("showerror", "Install failed", failure)
+                return
+            self.log_add("APK installed successfully. ✅")
 
             # Step 3: set the kiosk app as device owner
             self.log_add("[3/6] Setting kiosk app as device owner...")
