@@ -1,0 +1,11 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_abandon.request",
+  "defect": {
+    "keyword": "maxProperties",
+    "path": []
+  },
+  "instance": {
+    "reason": "x"
+  }
+}

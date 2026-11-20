@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "frame_header",
+  "instance": {
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "frame_id": 41,
+    "generation": 7,
+    "width": 1200,
+    "height": 1680
+  }
+}

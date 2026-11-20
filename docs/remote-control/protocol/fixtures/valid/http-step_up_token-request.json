@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "step_up_token.request",
+  "instance": {
+    "code": "bm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm8",
+    "verifier_d": "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx"
+  }
+}

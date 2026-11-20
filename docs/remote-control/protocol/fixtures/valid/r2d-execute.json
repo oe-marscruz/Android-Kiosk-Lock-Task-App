@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "execute",
+    "id": "x-23",
+    "reservation_id": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+    "command_id": "c-0004",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  }
+}

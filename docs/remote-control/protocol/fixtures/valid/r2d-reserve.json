@@ -1,0 +1,13 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "reserve",
+    "id": "x-22",
+    "command_id": "c-0004",
+    "op": "wipe",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "ttl_ms": 3000
+  }
+}

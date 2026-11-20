@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_approve.request",
+  "instance": {
+    "fingerprint": "AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01",
+    "accept_software": false
+  }
+}

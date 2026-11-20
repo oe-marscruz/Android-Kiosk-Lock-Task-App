@@ -1,0 +1,10 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "detach",
+    "id": null,
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  }
+}

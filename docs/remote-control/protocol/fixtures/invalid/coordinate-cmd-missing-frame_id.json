@@ -1,0 +1,24 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "defect": {
+    "keyword": "required",
+    "path": [],
+    "missing": "frame_id"
+  },
+  "instance": {
+    "v": 1,
+    "type": "cmd",
+    "id": "r-20",
+    "command_id": "c-0001",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "op": "tap",
+    "args": {
+      "x": 0.25,
+      "y": 0.5
+    },
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "generation": 7
+  }
+}

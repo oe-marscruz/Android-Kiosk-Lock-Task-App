@@ -1,0 +1,731 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cu-denver-equity-kiosk:remote-control:http:v1",
+  "title": "Remote staff control management HTTP API v1",
+  "description": "Request and response bodies for ARCHITECTURE.md v0.6 §3.1–§3.4 routes. Route table: v1.md §10.",
+  "$defs": {
+    "envelope_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "Request/reply correlation only. Never a command or dedup key."
+    },
+    "hex128": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "128-bit random, lowercase hex."
+    },
+    "b64url256": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "description": "256-bit random, base64url without padding."
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{16,128}$"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "Chosen by the desktop, unique per attachment. Dedup key is (attachment_id, command_id)."
+    },
+    "utc_time": {
+      "type": "string",
+      "maxLength": 40,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+      "description": "RFC 3339 UTC."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "group_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{2}(:[0-9A-F]{2}){31}$",
+      "description": "SHA-256 of the DER SPKI, 32 uppercase hex pairs."
+    },
+    "http_error_code": {
+      "enum": [
+        "INVALID_REQUEST",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "EXPIRED",
+        "RATE_LIMITED",
+        "UNAVAILABLE"
+      ],
+      "description": "contracts.HTTP_ERROR_CODES"
+    },
+    "enrollment_state": {
+      "enum": [
+        "pending",
+        "approved",
+        "active",
+        "rejected",
+        "expired",
+        "revoked",
+        "abandoned"
+      ],
+      "description": "contracts.ENROLLMENT_STATES"
+    },
+    "security_level": {
+      "enum": [
+        "strongbox",
+        "tee",
+        "software",
+        "unknown"
+      ],
+      "description": "contracts.SECURITY_LEVELS"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "cursor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "start_url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^https://[^#]*/auth/start/[A-Za-z0-9_-]{43}$"
+    },
+    "empty_body": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "error_body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/http_error_code"
+            }
+          }
+        }
+      }
+    },
+    "auth_transactions.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "port",
+        "state_d",
+        "challenge_d"
+      ],
+      "properties": {
+        "port": {
+          "$ref": "#/$defs/port"
+        },
+        "state_d": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "challenge_d": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "auth_transactions.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_url"
+      ],
+      "properties": {
+        "start_url": {
+          "$ref": "#/$defs/start_url"
+        }
+      }
+    },
+    "auth_continue.form": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_id",
+        "csrf"
+      ],
+      "properties": {
+        "start_id": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "csrf": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "auth_token.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "verifier_d"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "verifier_d": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "auth_token.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "token",
+        "expires_at"
+      ],
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "step_up_transactions.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_id",
+        "op",
+        "port",
+        "state_d",
+        "challenge_d",
+        "confirmed"
+      ],
+      "properties": {
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "op": {
+          "const": "wipe"
+        },
+        "port": {
+          "$ref": "#/$defs/port"
+        },
+        "state_d": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "challenge_d": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "confirmed": {
+          "const": true
+        }
+      }
+    },
+    "step_up_transactions.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_url"
+      ],
+      "properties": {
+        "start_url": {
+          "$ref": "#/$defs/start_url"
+        }
+      }
+    },
+    "step_up_token.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "verifier_d"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "verifier_d": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "step_up_token.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_up_id",
+        "expires_at"
+      ],
+      "properties": {
+        "step_up_id": {
+          "$ref": "#/$defs/b64url256"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "logout.request": {
+      "$ref": "#/$defs/empty_body"
+    },
+    "logout.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "const": "logged_out"
+        }
+      }
+    },
+    "enroll_create.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spki_der_b64",
+        "security_level"
+      ],
+      "properties": {
+        "spki_der_b64": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "security_level": {
+          "$ref": "#/$defs/security_level"
+        }
+      }
+    },
+    "enroll_create.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "device_id",
+        "fingerprint",
+        "expires_at",
+        "status_secret"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        },
+        "status_secret": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "enroll_status.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "expires_at"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/enrollment_state"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "enroll_abandon.request": {
+      "$ref": "#/$defs/empty_body"
+    },
+    "enroll_abandon.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "state"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "state": {
+          "$ref": "#/$defs/enrollment_state"
+        }
+      }
+    },
+    "enroll_list.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request_id",
+              "device_id",
+              "fingerprint",
+              "security_level",
+              "group_id",
+              "expires_at"
+            ],
+            "properties": {
+              "request_id": {
+                "$ref": "#/$defs/hex128"
+              },
+              "device_id": {
+                "$ref": "#/$defs/hex128"
+              },
+              "fingerprint": {
+                "$ref": "#/$defs/fingerprint"
+              },
+              "security_level": {
+                "$ref": "#/$defs/security_level"
+              },
+              "group_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/group_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "expires_at": {
+                "$ref": "#/$defs/utc_time"
+              }
+            }
+          }
+        },
+        "next_cursor": {
+          "$ref": "#/$defs/cursor"
+        }
+      }
+    },
+    "device_scope.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id"
+      ],
+      "properties": {
+        "group_id": {
+          "$ref": "#/$defs/group_id"
+        }
+      }
+    },
+    "device_scope.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_id",
+        "group_id"
+      ],
+      "properties": {
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "group_id": {
+          "$ref": "#/$defs/group_id"
+        }
+      }
+    },
+    "enroll_approve.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint",
+        "accept_software"
+      ],
+      "properties": {
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "accept_software": {
+          "type": "boolean"
+        }
+      }
+    },
+    "enroll_approve.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "device_id",
+        "group_id",
+        "state"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "group_id": {
+          "$ref": "#/$defs/group_id"
+        },
+        "state": {
+          "const": "approved"
+        }
+      }
+    },
+    "enroll_reject.request": {
+      "$ref": "#/$defs/empty_body"
+    },
+    "enroll_reject.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "state"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "state": {
+          "const": "rejected"
+        }
+      }
+    },
+    "audit.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "event_id",
+              "occurred_at",
+              "principal",
+              "session_id",
+              "device_id",
+              "op",
+              "decision",
+              "reason",
+              "command_id",
+              "outcome"
+            ],
+            "properties": {
+              "event_id": {
+                "$ref": "#/$defs/opaque_id"
+              },
+              "occurred_at": {
+                "$ref": "#/$defs/utc_time"
+              },
+              "principal": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "issuer",
+                      "subject"
+                    ],
+                    "properties": {
+                      "issuer": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "subject": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "session_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/opaque_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "device_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/hex128"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "op": {
+                "type": "string",
+                "pattern": "^[a-z_]{1,64}$"
+              },
+              "decision": {
+                "type": "string",
+                "pattern": "^[a-z_]{1,32}$"
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_]{1,64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "command_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/command_id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "outcome": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z_]{1,32}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "next_cursor": {
+          "$ref": "#/$defs/cursor"
+        }
+      }
+    },
+    "device_revoke.request": {
+      "$ref": "#/$defs/empty_body"
+    },
+    "device_revoke.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_id",
+        "state"
+      ],
+      "properties": {
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "state": {
+          "const": "revoked"
+        }
+      }
+    },
+    "session_revoke.request": {
+      "$ref": "#/$defs/empty_body"
+    },
+    "session_revoke.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "state"
+      ],
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/opaque_id"
+        },
+        "state": {
+          "const": "revoked"
+        }
+      }
+    },
+    "reconcile.request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint"
+      ],
+      "properties": {
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "reconcile.response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint",
+        "outcome"
+      ],
+      "properties": {
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "request_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "outcome": {
+          "const": "cleared"
+        }
+      }
+    }
+  }
+}

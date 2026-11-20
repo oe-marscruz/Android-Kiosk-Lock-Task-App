@@ -1,0 +1,12 @@
+{
+  "schema": "http-v1",
+  "def": "step_up_transactions.request",
+  "instance": {
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "op": "wipe",
+    "port": 53123,
+    "state_d": "bm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm8",
+    "challenge_d": "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx",
+    "confirmed": true
+  }
+}

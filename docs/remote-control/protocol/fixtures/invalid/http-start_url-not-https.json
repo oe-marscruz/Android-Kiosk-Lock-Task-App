@@ -1,0 +1,13 @@
+{
+  "schema": "http-v1",
+  "def": "auth_transactions.response",
+  "defect": {
+    "keyword": "pattern",
+    "path": [
+      "start_url"
+    ]
+  },
+  "instance": {
+    "start_url": "http://relay/auth/start/Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "http-v1",
+  "def": "error_body",
+  "defect": {
+    "keyword": "enum",
+    "path": [
+      "error",
+      "code"
+    ]
+  },
+  "instance": {
+    "error": {
+      "code": "TEAPOT"
+    }
+  }
+}

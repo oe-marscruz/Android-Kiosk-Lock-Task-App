@@ -1,0 +1,15 @@
+{
+  "schema": "http-v1",
+  "def": "auth_transactions.request",
+  "defect": {
+    "keyword": "minimum",
+    "path": [
+      "port"
+    ]
+  },
+  "instance": {
+    "port": 0,
+    "state_d": "bm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm8",
+    "challenge_d": "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "instance": {
+    "v": 1,
+    "type": "logout_result",
+    "id": "r-8",
+    "state": "logged_out"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "step_up_token.response",
+  "instance": {
+    "step_up_id": "c3RlcHVwLWlkLW9wYXF1ZS0yNTYtYml0LXZhbHVlLXg",
+    "expires_at": "2026-11-20T18:30:00Z"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "http-v1",
+  "def": "step_up_transactions.response",
+  "instance": {
+    "start_url": "https://relay.example.edu/auth/start/bm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm8"
+  }
+}

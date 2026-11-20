@@ -1,0 +1,26 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "instance": {
+    "v": 1,
+    "type": "devices",
+    "id": "r-2",
+    "items": [
+      {
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "state": "online",
+        "caps": {
+          "a11y": true,
+          "window_capture": true,
+          "remote_touch": true
+        }
+      },
+      {
+        "device_id": "00000000000000000000000000000000",
+        "state": "offline",
+        "caps": null
+      }
+    ],
+    "next_cursor": null
+  }
+}

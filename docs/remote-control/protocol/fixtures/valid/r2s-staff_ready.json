@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "instance": {
+    "v": 1,
+    "type": "staff_ready",
+    "id": "r-1",
+    "session_id": "sess_7Hq2LkP9xVb3Rt8Wm1Nz",
+    "display_name": "A. Staff",
+    "expires_at": "2026-11-20T18:30:00Z"
+  }
+}

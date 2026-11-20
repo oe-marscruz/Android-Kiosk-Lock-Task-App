@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "auth_token.response",
+  "instance": {
+    "token": "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx",
+    "expires_at": "2026-11-20T18:30:00Z"
+  }
+}

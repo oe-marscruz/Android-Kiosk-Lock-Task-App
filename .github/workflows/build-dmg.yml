@@ -21,8 +21,8 @@ jobs:
     env:
       DMG: CU-Denver-Equity-Kiosk-Manager.dmg
       # Declared by the source tree; the classifier fails if it disagrees with
-      # release/remote-inventory.txt. Flip to "1" in the change that adds remote code.
-      REMOTE_FEATURES: "0"
+      # release/remote-inventory.txt. relay/ exists since P1a, so the tree is remote-capable.
+      REMOTE_FEATURES: "1"
 
     steps:
       - name: Checkout

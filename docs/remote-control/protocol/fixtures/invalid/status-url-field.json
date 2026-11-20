@@ -1,0 +1,27 @@
+{
+  "schema": "v1",
+  "def": "device_to_relay",
+  "defect": {
+    "keyword": "additionalProperties",
+    "path": []
+  },
+  "instance": {
+    "v": 1,
+    "type": "status",
+    "id": null,
+    "lock_task_state": "LOCKED",
+    "owner_verified": true,
+    "destination_id": "equity_home",
+    "battery": 81,
+    "wifi": {
+      "connected": true,
+      "rssi_dbm": -58
+    },
+    "caps": {
+      "a11y": true,
+      "window_capture": true,
+      "remote_touch": true
+    },
+    "url": "https://www.ucdenver.edu/equity"
+  }
+}

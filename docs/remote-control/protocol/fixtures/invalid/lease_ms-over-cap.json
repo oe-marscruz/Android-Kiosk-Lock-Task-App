@@ -1,0 +1,17 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "defect": {
+    "keyword": "maximum",
+    "path": [
+      "lease_ms"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "lease_renewed",
+    "id": null,
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "lease_ms": 60001
+  }
+}

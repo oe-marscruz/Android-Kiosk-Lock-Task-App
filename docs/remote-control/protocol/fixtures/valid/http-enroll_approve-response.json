@@ -1,0 +1,10 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_approve.response",
+  "instance": {
+    "request_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "group_id": "equity-front-desk",
+    "state": "approved"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "defect": {
+    "keyword": "enum",
+    "path": [
+      "error",
+      "code"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "error",
+    "id": "r-24",
+    "error": {
+      "code": "TEAPOT"
+    }
+  }
+}

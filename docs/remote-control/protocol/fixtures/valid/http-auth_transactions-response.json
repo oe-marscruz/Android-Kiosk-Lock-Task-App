@@ -1,0 +1,7 @@
+{
+  "schema": "http-v1",
+  "def": "auth_transactions.response",
+  "instance": {
+    "start_url": "https://relay.example.edu/auth/start/Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx"
+  }
+}

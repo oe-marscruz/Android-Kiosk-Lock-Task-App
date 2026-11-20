@@ -1,0 +1,16 @@
+{
+  "schema": "v1",
+  "def": "device_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "hello",
+    "id": null,
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "app_version": "2.4.0",
+    "caps": {
+      "a11y": true,
+      "window_capture": true,
+      "remote_touch": true
+    }
+  }
+}

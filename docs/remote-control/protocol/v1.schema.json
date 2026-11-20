@@ -1,0 +1,2973 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cu-denver-equity-kiosk:remote-control:protocol:v1",
+  "title": "Remote staff control wire protocol v1",
+  "description": "JSON text messages over WSS (ARCHITECTURE.md v0.6 §4). Receivers validate against their inbound direction in $defs; the root accepts a message valid in any direction. Binary frames are described in v1.md; their JSON header is $defs/frame_header.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/staff_to_relay"
+    },
+    {
+      "$ref": "#/$defs/relay_to_staff"
+    },
+    {
+      "$ref": "#/$defs/relay_to_device"
+    },
+    {
+      "$ref": "#/$defs/device_to_relay"
+    }
+  ],
+  "$defs": {
+    "envelope_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "Request/reply correlation only. Never a command or dedup key."
+    },
+    "hex128": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "128-bit random, lowercase hex."
+    },
+    "b64url256": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "description": "256-bit random, base64url without padding."
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{16,128}$"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "Chosen by the desktop, unique per attachment. Dedup key is (attachment_id, command_id)."
+    },
+    "utc_time": {
+      "type": "string",
+      "maxLength": 40,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+      "description": "RFC 3339 UTC."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "group_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{2}(:[0-9A-F]{2}){31}$",
+      "description": "SHA-256 of the DER SPKI, 32 uppercase hex pairs."
+    },
+    "error_code": {
+      "enum": [
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "SESSION_EXPIRED",
+        "DISABLED_BY_POLICY",
+        "DEVICE_AUTH_FAILED",
+        "LEASE_BUSY",
+        "LEASE_REQUIRED",
+        "GRANT_REQUIRED",
+        "ATTACHMENT_STALE",
+        "GRANT_STALE",
+        "FRAME_UNKNOWN",
+        "FRAME_NOT_DISPLAYED",
+        "FRAME_EXPIRED",
+        "GENERATION_STALE",
+        "GESTURE_OUT_OF_BOUNDS",
+        "OVERLOADED",
+        "DEADLINE_EXCEEDED",
+        "DUPLICATE_ID_CONFLICT",
+        "OUTCOME_UNKNOWN",
+        "DISCONNECTED",
+        "RESERVATION_EXPIRED",
+        "UNSUPPORTED",
+        "INVALID_MESSAGE"
+      ],
+      "description": "contracts.ERROR_CODES"
+    },
+    "ack_error_code": {
+      "enum": [
+        "DISABLED_BY_POLICY",
+        "LEASE_REQUIRED",
+        "GRANT_REQUIRED",
+        "ATTACHMENT_STALE",
+        "GRANT_STALE",
+        "FRAME_UNKNOWN",
+        "FRAME_NOT_DISPLAYED",
+        "FRAME_EXPIRED",
+        "GENERATION_STALE",
+        "GESTURE_OUT_OF_BOUNDS",
+        "OVERLOADED",
+        "DEADLINE_EXCEEDED",
+        "DUPLICATE_ID_CONFLICT",
+        "OUTCOME_UNKNOWN",
+        "RESERVATION_EXPIRED",
+        "UNSUPPORTED"
+      ],
+      "description": "contracts.ACK_ERROR_CODES"
+    },
+    "session_end_code": {
+      "enum": [
+        "SESSION_EXPIRED",
+        "UNAUTHENTICATED",
+        "DISABLED_BY_POLICY"
+      ],
+      "description": "contracts.SESSION_END_CODES"
+    },
+    "terminal_reason": {
+      "enum": [
+        "local_stop",
+        "grant_expired",
+        "lease_expired",
+        "focus_lost",
+        "obscured",
+        "sensitive_state",
+        "geometry_changed",
+        "banner_lost",
+        "suspend",
+        "screen_off",
+        "service_failure",
+        "enrollment_opened",
+        "detached",
+        "disconnected",
+        "revoked",
+        "policy_changed"
+      ],
+      "description": "contracts.TERMINAL_REASONS (closed registry)"
+    },
+    "tablet_terminal_reason": {
+      "enum": [
+        "local_stop",
+        "grant_expired",
+        "lease_expired",
+        "focus_lost",
+        "obscured",
+        "sensitive_state",
+        "geometry_changed",
+        "banner_lost",
+        "suspend",
+        "screen_off",
+        "service_failure",
+        "enrollment_opened"
+      ],
+      "description": "contracts.TABLET_TERMINAL_REASONS"
+    },
+    "attach_mode": {
+      "enum": [
+        "status",
+        "kiosk"
+      ],
+      "description": "contracts.ATTACH_MODES"
+    },
+    "live_attachment_state": {
+      "enum": [
+        "status",
+        "pending_approval",
+        "granted"
+      ],
+      "description": "contracts.LIVE_ATTACHMENT_STATES"
+    },
+    "command_op": {
+      "enum": [
+        "tap",
+        "swipe",
+        "long_press",
+        "kiosk_back",
+        "kiosk_home",
+        "reload_kiosk",
+        "lock_now",
+        "reboot",
+        "wipe",
+        "navigate",
+        "enter_kiosk",
+        "exit_kiosk"
+      ],
+      "description": "contracts.COMMAND_OPS, reserved ops included"
+    },
+    "device_command_op": {
+      "enum": [
+        "tap",
+        "swipe",
+        "long_press",
+        "kiosk_back",
+        "kiosk_home",
+        "reload_kiosk",
+        "lock_now",
+        "reboot"
+      ],
+      "description": "contracts.DEVICE_COMMAND_OPS"
+    },
+    "coordinate_op": {
+      "enum": [
+        "tap",
+        "swipe",
+        "long_press"
+      ],
+      "description": "contracts.COORDINATE_OPS"
+    },
+    "command_outcome": {
+      "enum": [
+        "ok",
+        "failed",
+        "rejected_expired",
+        "outcome_unknown"
+      ],
+      "description": "contracts.COMMAND_OUTCOMES"
+    },
+    "device_connection_state": {
+      "enum": [
+        "online",
+        "offline"
+      ],
+      "description": "contracts.DEVICE_CONNECTION_STATES"
+    },
+    "lock_task_state": {
+      "enum": [
+        "NONE",
+        "LOCKED",
+        "PINNED"
+      ],
+      "description": "contracts.LOCK_TASK_STATES"
+    },
+    "unit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Finite coordinate relative to the content-rect crop."
+    },
+    "frame_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "deadline_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000,
+      "description": "<= CMD_DEADLINE_S"
+    },
+    "lease_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60000,
+      "description": "<= LEASE_IDLE_S"
+    },
+    "remaining_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300000,
+      "description": "<= GRANT_MAX_S"
+    },
+    "caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a11y",
+        "window_capture",
+        "remote_touch"
+      ],
+      "properties": {
+        "a11y": {
+          "type": "boolean"
+        },
+        "window_capture": {
+          "type": "boolean"
+        },
+        "remote_touch": {
+          "type": "boolean"
+        }
+      }
+    },
+    "point_args": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/unit"
+        },
+        "y": {
+          "$ref": "#/$defs/unit"
+        }
+      }
+    },
+    "swipe_args": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x1",
+        "y1",
+        "x2",
+        "y2",
+        "ms"
+      ],
+      "properties": {
+        "x1": {
+          "$ref": "#/$defs/unit"
+        },
+        "y1": {
+          "$ref": "#/$defs/unit"
+        },
+        "x2": {
+          "$ref": "#/$defs/unit"
+        },
+        "y2": {
+          "$ref": "#/$defs/unit"
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000
+        }
+      }
+    },
+    "empty_args": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "frame_header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment_id",
+        "grant_id",
+        "frame_id",
+        "generation",
+        "width",
+        "height"
+      ],
+      "description": "JSON header of a binary frame (v1.md). Not a JSON text message.",
+      "properties": {
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/frame_id"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      }
+    },
+    "s2r.staff_auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "token"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "staff_auth"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "token": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "s2r.list_devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "list_devices"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "s2r.attach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "mode"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "attach"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "mode": {
+          "$ref": "#/$defs/attach_mode"
+        }
+      }
+    },
+    "s2r.detach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "detach"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "s2r.lease_renew": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "lease_renew"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "s2r.frame_displayed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "grant_id",
+        "frame_id",
+        "generation"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "frame_displayed"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/frame_id"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        }
+      }
+    },
+    "s2r.cmd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "command_id",
+        "device_id",
+        "attachment_id",
+        "op",
+        "args"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "cmd"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "op": {
+          "$ref": "#/$defs/command_op"
+        },
+        "args": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/point_args"
+            },
+            {
+              "$ref": "#/$defs/swipe_args"
+            },
+            {
+              "$ref": "#/$defs/empty_args"
+            }
+          ]
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/frame_id"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        },
+        "step_up_id": {
+          "$ref": "#/$defs/b64url256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "tap",
+                  "long_press"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/point_args"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "swipe"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/swipe_args"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "tap",
+                  "swipe",
+                  "long_press"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "grant_id",
+              "frame_id",
+              "generation"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "kiosk_back",
+                  "kiosk_home",
+                  "reload_kiosk",
+                  "lock_now",
+                  "reboot",
+                  "wipe",
+                  "navigate",
+                  "enter_kiosk",
+                  "exit_kiosk"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/empty_args"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "frame_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "generation"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "wipe"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "step_up_id",
+              "grant_id"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "step_up_id"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "s2r.logout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "logout"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        }
+      }
+    },
+    "staff_to_relay": {
+      "description": "Every JSON text message valid in the staff to relay direction.",
+      "type": "object",
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "staff_auth",
+            "list_devices",
+            "attach",
+            "detach",
+            "lease_renew",
+            "frame_displayed",
+            "cmd",
+            "logout"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "staff_auth"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.staff_auth"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "list_devices"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.list_devices"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "attach"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.attach"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "detach"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.detach"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lease_renew"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.lease_renew"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "frame_displayed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.frame_displayed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cmd"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.cmd"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "logout"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/s2r.logout"
+          }
+        }
+      ]
+    },
+    "r2s.staff_ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "session_id",
+        "display_name",
+        "expires_at"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "staff_ready"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "session_id": {
+          "$ref": "#/$defs/opaque_id"
+        },
+        "display_name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "r2s.devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "items",
+        "next_cursor"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "devices"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "device_id",
+              "state",
+              "caps"
+            ],
+            "properties": {
+              "device_id": {
+                "$ref": "#/$defs/hex128"
+              },
+              "state": {
+                "$ref": "#/$defs/device_connection_state"
+              },
+              "caps": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/caps"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "r2s.attach_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "mode",
+        "state"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "attach_result"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "mode": {
+          "$ref": "#/$defs/attach_mode"
+        },
+        "state": {
+          "$ref": "#/$defs/live_attachment_state"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "status"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "const": "status"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "pending_approval",
+                  "granted"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "r2s.detach_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "detach_result"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2s.lease_renew_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "expires_at"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "lease_renew_result"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "r2s.support_pending": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_pending"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2s.support_granted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "grant_id",
+        "expires_at"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_granted"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utc_time"
+        }
+      }
+    },
+    "r2s.support_stopped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_stopped"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "reason": {
+          "$ref": "#/$defs/terminal_reason"
+        }
+      }
+    },
+    "r2s.attachment_ended": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "attachment_ended"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "reason": {
+          "$ref": "#/$defs/terminal_reason"
+        }
+      }
+    },
+    "r2s.device_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "lock_task_state",
+        "owner_verified",
+        "destination_id",
+        "battery",
+        "wifi",
+        "caps"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_status"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "lock_task_state": {
+          "$ref": "#/$defs/lock_task_state"
+        },
+        "owner_verified": {
+          "type": "boolean"
+        },
+        "destination_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "battery": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wifi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "connected",
+            "rssi_dbm"
+          ],
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "rssi_dbm": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -127,
+                  "maximum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "caps": {
+          "$ref": "#/$defs/caps"
+        }
+      }
+    },
+    "r2s.device_disconnected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_disconnected"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2s.cmd_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "attachment_id",
+        "command_id",
+        "state",
+        "error"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "cmd_result"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "state": {
+          "$ref": "#/$defs/command_outcome"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error_code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/error_code"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "outcome_unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "const": "OUTCOME_UNKNOWN"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "rejected_expired"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "enum": [
+                  "DEADLINE_EXCEEDED",
+                  "RESERVATION_EXPIRED"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "r2s.error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "error"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "error"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/envelope_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/error_code"
+            }
+          }
+        }
+      }
+    },
+    "r2s.session_ended": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "code"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "session_ended"
+        },
+        "id": {
+          "const": null
+        },
+        "code": {
+          "$ref": "#/$defs/session_end_code"
+        }
+      }
+    },
+    "r2s.logout_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "state"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "logout_result"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "state": {
+          "const": "logged_out"
+        }
+      }
+    },
+    "relay_to_staff": {
+      "description": "Every JSON text message valid in the relay to staff direction.",
+      "type": "object",
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "staff_ready",
+            "devices",
+            "attach_result",
+            "detach_result",
+            "lease_renew_result",
+            "support_pending",
+            "support_granted",
+            "support_stopped",
+            "attachment_ended",
+            "device_status",
+            "device_disconnected",
+            "cmd_result",
+            "error",
+            "session_ended",
+            "logout_result"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "staff_ready"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.staff_ready"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "devices"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.devices"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "attach_result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.attach_result"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "detach_result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.detach_result"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lease_renew_result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.lease_renew_result"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_pending"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.support_pending"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_granted"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.support_granted"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_stopped"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.support_stopped"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "attachment_ended"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.attachment_ended"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_status"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.device_status"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_disconnected"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.device_disconnected"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cmd_result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.cmd_result"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.error"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "session_ended"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.session_ended"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "logout_result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2s.logout_result"
+          }
+        }
+      ]
+    },
+    "r2d.device_challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "audience",
+        "nonce"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_challenge"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "nonce": {
+          "$ref": "#/$defs/b64url256"
+        }
+      }
+    },
+    "r2d.device_ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_ready"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2d.attach_open": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "mode",
+        "lease_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "attach_open"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "mode": {
+          "$ref": "#/$defs/attach_mode"
+        },
+        "display_name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "lease_ms": {
+          "$ref": "#/$defs/lease_ms"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "kiosk"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "display_name"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "display_name"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "r2d.lease_renewed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "lease_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "lease_renewed"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "lease_ms": {
+          "$ref": "#/$defs/lease_ms"
+        }
+      }
+    },
+    "r2d.detach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "detach"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2d.frame_displayed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "grant_id",
+        "frame_id",
+        "generation"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "frame_displayed"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/frame_id"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        }
+      }
+    },
+    "r2d.cmd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "command_id",
+        "attachment_id",
+        "op",
+        "args",
+        "deadline_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "cmd"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "op": {
+          "$ref": "#/$defs/device_command_op"
+        },
+        "args": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/point_args"
+            },
+            {
+              "$ref": "#/$defs/swipe_args"
+            },
+            {
+              "$ref": "#/$defs/empty_args"
+            }
+          ]
+        },
+        "deadline_ms": {
+          "$ref": "#/$defs/deadline_ms"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "frame_id": {
+          "$ref": "#/$defs/frame_id"
+        },
+        "generation": {
+          "$ref": "#/$defs/generation"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "tap",
+                  "long_press"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/point_args"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "swipe"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/swipe_args"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "tap",
+                  "swipe",
+                  "long_press"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "required": [
+              "grant_id",
+              "frame_id",
+              "generation"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "kiosk_back",
+                  "kiosk_home",
+                  "reload_kiosk",
+                  "lock_now",
+                  "reboot",
+                  "wipe",
+                  "navigate",
+                  "enter_kiosk",
+                  "exit_kiosk"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/empty_args"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "frame_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "generation"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "r2d.reserve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "command_id",
+        "op",
+        "attachment_id",
+        "ttl_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "reserve"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "op": {
+          "const": "wipe"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "ttl_ms": {
+          "$ref": "#/$defs/deadline_ms"
+        }
+      }
+    },
+    "r2d.execute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "reservation_id",
+        "command_id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "execute"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "reservation_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "r2d.error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "error"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "error"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/envelope_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/error_code"
+            }
+          }
+        }
+      }
+    },
+    "relay_to_device": {
+      "description": "Every JSON text message valid in the relay to device direction.",
+      "type": "object",
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "device_challenge",
+            "device_ready",
+            "attach_open",
+            "lease_renewed",
+            "detach",
+            "frame_displayed",
+            "cmd",
+            "reserve",
+            "execute",
+            "error"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_challenge"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.device_challenge"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_ready"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.device_ready"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "attach_open"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.attach_open"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lease_renewed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.lease_renewed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "detach"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.detach"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "frame_displayed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.frame_displayed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cmd"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.cmd"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "reserve"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.reserve"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "execute"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.execute"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/r2d.error"
+          }
+        }
+      ]
+    },
+    "d2r.device_auth_start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_auth_start"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "d2r.device_auth_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "sig"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "device_auth_proof"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,96}$",
+          "description": "DER SHA256withECDSA signature, base64url without padding."
+        }
+      }
+    },
+    "d2r.hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "device_id",
+        "app_version",
+        "caps"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "hello"
+        },
+        "id": {
+          "const": null
+        },
+        "device_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "app_version": {
+          "type": "string",
+          "pattern": "^[0-9A-Za-z.+_-]{1,32}$"
+        },
+        "caps": {
+          "$ref": "#/$defs/caps"
+        }
+      }
+    },
+    "d2r.status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "lock_task_state",
+        "owner_verified",
+        "destination_id",
+        "battery",
+        "wifi",
+        "caps"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "status"
+        },
+        "id": {
+          "const": null
+        },
+        "lock_task_state": {
+          "$ref": "#/$defs/lock_task_state"
+        },
+        "owner_verified": {
+          "type": "boolean"
+        },
+        "destination_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "battery": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wifi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "connected",
+            "rssi_dbm"
+          ],
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "rssi_dbm": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -127,
+                  "maximum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "caps": {
+          "$ref": "#/$defs/caps"
+        }
+      }
+    },
+    "d2r.support_pending": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_pending"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "d2r.support_granted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "grant_id",
+        "remaining_ms"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_granted"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "grant_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "remaining_ms": {
+          "$ref": "#/$defs/remaining_ms"
+        }
+      }
+    },
+    "d2r.support_stopped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "support_stopped"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "reason": {
+          "$ref": "#/$defs/tablet_terminal_reason"
+        }
+      }
+    },
+    "d2r.attachment_expired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "attachment_id",
+        "reason"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "attachment_expired"
+        },
+        "id": {
+          "const": null
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "reason": {
+          "const": "lease_expired"
+        }
+      }
+    },
+    "d2r.reserved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "command_id",
+        "attachment_id",
+        "reservation_id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "reserved"
+        },
+        "id": {
+          "$ref": "#/$defs/envelope_id"
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "reservation_id": {
+          "$ref": "#/$defs/hex128"
+        }
+      }
+    },
+    "d2r.ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "command_id",
+        "attachment_id",
+        "ok",
+        "err"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "ack"
+        },
+        "id": {
+          "const": null
+        },
+        "command_id": {
+          "$ref": "#/$defs/command_id"
+        },
+        "attachment_id": {
+          "$ref": "#/$defs/hex128"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "err": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ack_error_code"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "ok": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "err": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "err": {
+                "$ref": "#/$defs/ack_error_code"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "d2r.error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "error"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "error"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/envelope_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/error_code"
+            }
+          }
+        }
+      }
+    },
+    "device_to_relay": {
+      "description": "Every JSON text message valid in the device to relay direction.",
+      "type": "object",
+      "required": [
+        "v",
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "device_auth_start",
+            "device_auth_proof",
+            "hello",
+            "status",
+            "support_pending",
+            "support_granted",
+            "support_stopped",
+            "attachment_expired",
+            "reserved",
+            "ack",
+            "error"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_auth_start"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.device_auth_start"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "device_auth_proof"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.device_auth_proof"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "hello"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.hello"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "status"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.status"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_pending"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.support_pending"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_granted"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.support_granted"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "support_stopped"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.support_stopped"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "attachment_expired"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.attachment_expired"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "reserved"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.reserved"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ack"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.ack"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "error"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/d2r.error"
+          }
+        }
+      ]
+    }
+  }
+}

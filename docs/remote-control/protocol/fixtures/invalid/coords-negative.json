@@ -1,0 +1,27 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "defect": {
+    "keyword": "minimum",
+    "path": [
+      "args",
+      "y"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "cmd",
+    "id": "x-20",
+    "command_id": "c-0001",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "op": "tap",
+    "args": {
+      "x": 0.3,
+      "y": -0.01
+    },
+    "deadline_ms": 4200,
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "frame_id": 41,
+    "generation": 7
+  }
+}

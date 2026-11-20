@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_create.request",
+  "instance": {
+    "spki_der_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "security_level": "strongbox"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "instance": {
+    "v": 1,
+    "type": "cmd_result",
+    "id": null,
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "command_id": "c-0001",
+    "state": "outcome_unknown",
+    "error": "OUTCOME_UNKNOWN"
+  }
+}

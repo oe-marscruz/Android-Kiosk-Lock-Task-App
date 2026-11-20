@@ -1,0 +1,5 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_reject.request",
+  "instance": {}
+}

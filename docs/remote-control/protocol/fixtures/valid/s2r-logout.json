@@ -1,0 +1,9 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "logout",
+    "id": "r-8"
+  }
+}

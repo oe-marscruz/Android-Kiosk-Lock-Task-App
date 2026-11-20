@@ -1,0 +1,17 @@
+{
+  "schema": "v1",
+  "def": "device_to_relay",
+  "defect": {
+    "keyword": "const",
+    "path": [
+      "reason"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "attachment_expired",
+    "id": null,
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "reason": "local_stop"
+  }
+}

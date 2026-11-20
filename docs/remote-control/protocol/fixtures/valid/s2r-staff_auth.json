@@ -1,0 +1,10 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "staff_auth",
+    "id": "r-1",
+    "token": "Zm9vYmFyYmF6cXV4cXV1eGNvcmdlZ3JhdWx0Z2FycGx"
+  }
+}

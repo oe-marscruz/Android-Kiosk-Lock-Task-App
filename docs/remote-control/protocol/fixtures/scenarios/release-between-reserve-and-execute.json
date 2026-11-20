@@ -1,0 +1,180 @@
+{
+  "name": "release-between-reserve-and-execute",
+  "title": "The attachment is released after reserved and before execute",
+  "spec": [
+    "§4 wipe transitions (any earlier state -> terminal)",
+    "§2.2 wipe reservations"
+  ],
+  "description": "Local Stop on the tablet releases the attachment after it replied reserved. The relay never consumes the step-up for a released attachment, never sends execute, and reports failed. The tablet destroyed the reservation on release.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "cmd",
+        "id": "r-30",
+        "command_id": "c-0004",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "op": "wipe",
+        "args": {},
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "step_up_id": "c3RlcHVwLWlkLW9wYXF1ZS0yNTYtYml0LXZhbHVlLXg"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "reserve",
+        "id": "x-1",
+        "command_id": "c-0004",
+        "op": "wipe",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "ttl_ms": 4000
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "reserved",
+        "id": "x-1",
+        "command_id": "c-0004",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reservation_id": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Stop; grant, lease and reservation RES are destroyed"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_stopped",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "local_stop"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_stopped",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "local_stop"
+      }
+    },
+    {
+      "local": "relay",
+      "event": "execute writer: live check fails (attachment released); step-up NOT consumed"
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "execute",
+      "why": "released attachment"
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "cmd_result",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "command_id": "c-0004",
+        "state": "failed",
+        "error": "GRANT_REQUIRED"
+      }
+    },
+    {
+      "expect": "relay",
+      "assert": "step_up_id is still unconsumed but bound to ATT, which is released, so it can never be used"
+    }
+  ]
+}

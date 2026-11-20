@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "device_scope.response",
+  "instance": {
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "group_id": "equity-front-desk"
+  }
+}

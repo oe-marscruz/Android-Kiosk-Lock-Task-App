@@ -1,0 +1,11 @@
+{
+  "schema": "v1",
+  "def": "device_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "device_auth_proof",
+    "id": "t-2",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "sig": "MEUCIQDx3p1kQ8mN0vYrT6wJ2aFhB7cL9sE4uZ1gK5oP3iH8VwIgS2dR7nM1qX4yT9bV6cW0eA5fJ8kL3pU2hN7oG1iY4zQ"
+  }
+}

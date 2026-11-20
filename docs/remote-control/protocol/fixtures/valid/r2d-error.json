@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "error",
+    "id": "t-3",
+    "error": {
+      "code": "DEVICE_AUTH_FAILED"
+    }
+  }
+}

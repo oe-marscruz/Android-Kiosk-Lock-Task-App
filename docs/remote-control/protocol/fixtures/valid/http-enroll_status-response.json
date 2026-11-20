@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_status.response",
+  "instance": {
+    "state": "approved",
+    "expires_at": "2026-11-20T18:30:00Z"
+  }
+}

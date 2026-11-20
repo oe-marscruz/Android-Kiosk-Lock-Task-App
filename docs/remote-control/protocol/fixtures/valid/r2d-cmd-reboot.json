@@ -1,0 +1,15 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "cmd",
+    "id": "x-21",
+    "command_id": "c-0007",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "op": "reboot",
+    "args": {},
+    "deadline_ms": 5000,
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+  }
+}

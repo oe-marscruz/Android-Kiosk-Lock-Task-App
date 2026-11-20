@@ -1,0 +1,22 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "defect": {
+    "keyword": "maxProperties",
+    "path": [
+      "args"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "cmd",
+    "id": "r-24",
+    "command_id": "c-0005",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "op": "navigate",
+    "args": {
+      "url": "https://example.com"
+    }
+  }
+}

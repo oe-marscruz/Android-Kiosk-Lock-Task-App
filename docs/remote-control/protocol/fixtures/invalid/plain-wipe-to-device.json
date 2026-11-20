@@ -1,0 +1,21 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "defect": {
+    "keyword": "enum",
+    "path": [
+      "op"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "cmd",
+    "id": "x-9",
+    "command_id": "c-0004",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "op": "wipe",
+    "args": {},
+    "deadline_ms": 3000,
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+  }
+}

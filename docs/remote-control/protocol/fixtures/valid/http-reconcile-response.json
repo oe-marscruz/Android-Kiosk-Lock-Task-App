@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "reconcile.response",
+  "instance": {
+    "fingerprint": "AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01",
+    "outcome": "cleared"
+  }
+}

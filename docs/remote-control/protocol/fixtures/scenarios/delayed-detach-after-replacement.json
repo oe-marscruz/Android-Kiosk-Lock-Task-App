@@ -1,0 +1,132 @@
+{
+  "name": "delayed-detach-after-replacement",
+  "title": "A delayed detach and a late tablet event for a replaced attachment are no-ops",
+  "spec": [
+    "§3.3 Attachment lifecycle (status -> kiosk replacement)",
+    "§4 Stale IDs"
+  ],
+  "description": "The owner holds status attachment ATT, then requests kiosk, which replaces it with ATT2. A delayed staff detach{ATT} and a late tablet attachment_expired{ATT} must not touch ATT2.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "status"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "status",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "status",
+        "state": "status"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-2",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "detach",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-2",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "detach",
+        "id": "r-0",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "error",
+        "id": "r-0",
+        "error": {
+          "code": "ATTACHMENT_STALE"
+        }
+      }
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "detach",
+      "why": "ATT is already released; ATT2 is not detached"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attachment_expired",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "lease_expired"
+      }
+    },
+    {
+      "expect": "relay",
+      "assert": "stale tablet event for ATT is ignored under the device lock; ATT2 stays pending_approval"
+    },
+    {
+      "absent": "relay_to_staff",
+      "type": "attachment_ended",
+      "why": "no terminal event for ATT2"
+    }
+  ]
+}

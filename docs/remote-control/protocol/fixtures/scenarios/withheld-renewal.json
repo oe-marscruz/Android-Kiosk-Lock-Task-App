@@ -1,0 +1,204 @@
+{
+  "name": "withheld-renewal",
+  "title": "Relay withholds lease_renewed; the tablet lease expires locally",
+  "spec": [
+    "§2.2 Tablet lease",
+    "§3.3 Attachment lifecycle",
+    "§4 lifecycle"
+  ],
+  "description": "The staff renews, but lease_renewed never reaches the tablet (lost or withheld). The tablet's own elapsedRealtime() lease expires with no detach. Dependent work is never forwarded before lease_renewed, and the tablet's expiry wins.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "lease_renew",
+        "id": "r-3",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "lease_renew_result",
+        "id": "r-3",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "lease_renewed",
+      "why": "withheld or lost in transit"
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "cmd",
+        "id": "r-4",
+        "command_id": "c-0010",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "op": "kiosk_back",
+        "args": {},
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+      }
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "cmd",
+      "why": "work that depends on a renewal is forwarded only after lease_renewed"
+    },
+    {
+      "local": "tablet",
+      "event": "local lease deadline (receipt of attach_open + lease_ms) passes"
+    },
+    {
+      "expect": "tablet",
+      "assert": "capture, input and queued work stop before any message is sent"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attachment_expired",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "lease_expired"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "cmd_result",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "command_id": "c-0010",
+        "state": "failed",
+        "error": "LEASE_REQUIRED"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attachment_ended",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "lease_expired"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "lease_renew",
+        "id": "r-5",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "error",
+        "id": "r-5",
+        "error": {
+          "code": "ATTACHMENT_STALE"
+        }
+      }
+    },
+    {
+      "expect": "relay",
+      "assert": "ATT is released; nothing revives it"
+    }
+  ]
+}

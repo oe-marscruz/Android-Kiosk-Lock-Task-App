@@ -1,0 +1,13 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "frame_displayed",
+    "id": "r-7",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "frame_id": 41,
+    "generation": 7
+  }
+}

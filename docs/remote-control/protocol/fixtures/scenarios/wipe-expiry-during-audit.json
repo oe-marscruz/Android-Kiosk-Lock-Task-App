@@ -1,0 +1,176 @@
+{
+  "name": "wipe-expiry-during-audit",
+  "title": "The command deadline passes while the execute intent audit is being written",
+  "spec": [
+    "§2.1 writer commit",
+    "§3.3 step-up",
+    "§4 wipe transitions (execute_committing -> execute_sent)"
+  ],
+  "description": "Reserve succeeds, execute_committing consumes the step-up, and the intent audit is slow. The post-audit deadline recheck finds a budget <= 0, so nothing is sent. The result is rejected_expired, never OUTCOME_UNKNOWN, and the step-up stays consumed.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "cmd",
+        "id": "r-30",
+        "command_id": "c-0004",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "op": "wipe",
+        "args": {},
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "step_up_id": "c3RlcHVwLWlkLW9wYXF1ZS0yNTYtYml0LXZhbHVlLXg"
+      }
+    },
+    {
+      "local": "relay",
+      "event": "admission checks step-up binding and freshness without consuming it"
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "reserve",
+        "id": "x-1",
+        "command_id": "c-0004",
+        "op": "wipe",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "ttl_ms": 4000
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "reserved",
+        "id": "x-1",
+        "command_id": "c-0004",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reservation_id": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
+      }
+    },
+    {
+      "local": "relay",
+      "event": "reserved -> execute_committing: live checks pass; consume_step_up succeeds"
+    },
+    {
+      "local": "relay",
+      "event": "intent audit write takes longer than the remaining command deadline"
+    },
+    {
+      "local": "relay",
+      "event": "post-audit recheck: remaining budget <= 0"
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "execute",
+      "why": "nothing is sent when the budget is exhausted"
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "cmd_result",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "command_id": "c-0004",
+        "state": "rejected_expired",
+        "error": "DEADLINE_EXCEEDED"
+      }
+    },
+    {
+      "expect": "relay",
+      "assert": "step-up remains consumed; a new wipe needs a new step-up"
+    },
+    {
+      "local": "tablet",
+      "event": "reservation RES reaches its local monotonic expiry and is destroyed unused"
+    },
+    {
+      "expect": "tablet",
+      "assert": "wipeDevice is never called"
+    }
+  ]
+}

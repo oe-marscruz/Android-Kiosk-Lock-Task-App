@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "relay_to_staff",
+  "instance": {
+    "v": 1,
+    "type": "error",
+    "id": null,
+    "error": {
+      "code": "UNAUTHENTICATED"
+    }
+  }
+}

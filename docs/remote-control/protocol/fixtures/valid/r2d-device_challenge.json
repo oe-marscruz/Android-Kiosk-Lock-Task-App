@@ -1,0 +1,11 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "device_challenge",
+    "id": "t-1",
+    "audience": "cu-denver-kiosk-relay",
+    "nonce": "bm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm9uY2Utbm8"
+  }
+}

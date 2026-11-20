@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "reconcile.request",
+  "instance": {
+    "fingerprint": "AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01",
+    "request_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1"
+  }
+}

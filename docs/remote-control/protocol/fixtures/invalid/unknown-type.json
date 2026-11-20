@@ -1,0 +1,16 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "defect": {
+    "keyword": "enum",
+    "path": [
+      "type"
+    ]
+  },
+  "instance": {
+    "v": 1,
+    "type": "set_url",
+    "id": "r-1",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+  }
+}

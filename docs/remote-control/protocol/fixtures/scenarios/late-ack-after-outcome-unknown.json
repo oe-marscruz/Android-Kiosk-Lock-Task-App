@@ -1,0 +1,277 @@
+{
+  "name": "late-ack-after-outcome-unknown",
+  "title": "A tablet ack that arrives after OUTCOME_UNKNOWN only reconciles the audit",
+  "spec": [
+    "§4 Terminal results",
+    "§4 Admission",
+    "§3.3 any live -> released"
+  ],
+  "description": "A tap is dispatched; the staff detaches before the ack, so the relay reports outcome_unknown. The ack then arrives on the original connection. It is audited, does not change the reported result, restores no authority and is not forwarded to the new attachment ATT2.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "frame": "device_to_relay",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "frame": "relay_to_staff",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "local": "desktop",
+      "event": "viewer steps 1-7 (§2.3) complete for frame 41; input enabled"
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "frame_displayed",
+        "id": "r-2",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "frame_displayed",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "cmd",
+        "id": "r-20",
+        "command_id": "c-0001",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "op": "tap",
+        "args": {
+          "x": 0.25,
+          "y": 0.5
+        },
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "cmd",
+        "id": "x-20",
+        "command_id": "c-0001",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "op": "tap",
+        "args": {
+          "x": 0.25,
+          "y": 0.5
+        },
+        "deadline_ms": 4200,
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 41,
+        "generation": 7
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "detach",
+        "id": "r-6",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "detach",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "detach_result",
+        "id": "r-6",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "cmd_result",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "command_id": "c-0001",
+        "state": "outcome_unknown",
+        "error": "OUTCOME_UNKNOWN"
+      }
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-7",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-7",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "ack",
+        "id": null,
+        "command_id": "c-0001",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "ok": true,
+        "err": null
+      }
+    },
+    {
+      "expect": "relay",
+      "assert": "late ack audited against (ATT, c-0001); reported outcome stays outcome_unknown"
+    },
+    {
+      "absent": "relay_to_staff",
+      "type": "cmd_result",
+      "why": "result was already reported once; ATT2 never sees ATT's ack"
+    }
+  ]
+}

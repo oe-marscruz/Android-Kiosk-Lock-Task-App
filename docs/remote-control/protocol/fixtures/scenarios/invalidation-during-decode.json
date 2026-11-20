@@ -1,0 +1,155 @@
+{
+  "name": "invalidation-during-decode",
+  "title": "Grant invalidation arrives while the desktop is decoding a frame",
+  "spec": [
+    "§2.3 Display boundary steps 1-3",
+    "§4 Relay frame fence"
+  ],
+  "description": "Frame 42 arrives and input is disabled. While it decodes off the Tk thread, support_stopped is processed on Tk. When the decode result is marshalled back, step 3 fails: nothing is committed, no frame_displayed is sent, input stays disabled.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "frame": "device_to_relay",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 42,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "frame": "relay_to_staff",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 42,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "local": "desktop",
+      "event": "Tk: disable input; start decode of frame 42 off the UI thread"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_stopped",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "geometry_changed"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_stopped",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "geometry_changed"
+      }
+    },
+    {
+      "local": "desktop",
+      "event": "Tk: invalidation clears the displayed reference, keeps input disabled"
+    },
+    {
+      "local": "desktop",
+      "event": "decode of frame 42 completes; Tk step 3 finds the grant no longer live"
+    },
+    {
+      "absent": "staff_to_relay",
+      "type": "frame_displayed",
+      "why": "decoded frame is discarded, never committed"
+    },
+    {
+      "expect": "desktop",
+      "assert": "input disabled; viewer shows 'Kiosk view changed'"
+    }
+  ]
+}

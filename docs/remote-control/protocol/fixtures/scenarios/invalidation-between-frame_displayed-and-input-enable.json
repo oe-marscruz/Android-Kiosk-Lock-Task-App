@@ -1,0 +1,175 @@
+{
+  "name": "invalidation-between-frame_displayed-and-input-enable",
+  "title": "Invalidation lands after frame_displayed is sent but before input is enabled",
+  "spec": [
+    "§2.3 Display boundary steps 5-7",
+    "§4 Relay frame fence",
+    "§4 Coordinate commands"
+  ],
+  "description": "The desktop commits frame 42 and sends frame_displayed. Before the step-6 recheck runs on Tk, attachment_ended is processed. The recheck fails, so input is never enabled. The relay fence drops frame_displayed for the released grant, and the tablet would ignore it anyway.",
+  "steps": [
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "attach",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "mode": "kiosk"
+      }
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "attach_open",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "display_name": "A. Staff",
+        "lease_ms": 60000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attach_result",
+        "id": "r-1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "mode": "kiosk",
+        "state": "pending_approval"
+      }
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_pending",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "local": "tablet",
+      "event": "person taps Allow; grant deadline = elapsedRealtime() + GRANT_MAX_S"
+    },
+    {
+      "send": "device_to_relay",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "remaining_ms": 300000
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "support_granted",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    },
+    {
+      "frame": "device_to_relay",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 42,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "frame": "relay_to_staff",
+      "header": {
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 42,
+        "generation": 7,
+        "width": 1200,
+        "height": 1680
+      }
+    },
+    {
+      "local": "desktop",
+      "event": "steps 1-4: input disabled, decode, live check passes, frame 42 committed"
+    },
+    {
+      "send": "staff_to_relay",
+      "message": {
+        "v": 1,
+        "type": "frame_displayed",
+        "id": "r-3",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "grant_id": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "frame_id": 42,
+        "generation": 7
+      }
+    },
+    {
+      "local": "relay",
+      "event": "session revoked by an admin; ATT released under the device lock"
+    },
+    {
+      "send": "relay_to_device",
+      "message": {
+        "v": 1,
+        "type": "detach",
+        "id": null,
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    },
+    {
+      "send": "relay_to_staff",
+      "message": {
+        "v": 1,
+        "type": "attachment_ended",
+        "id": null,
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "reason": "revoked"
+      }
+    },
+    {
+      "absent": "relay_to_device",
+      "type": "frame_displayed",
+      "why": "relay frame fence: grant no longer live at the writer"
+    },
+    {
+      "local": "desktop",
+      "event": "Tk: invalidation clears the displayed reference"
+    },
+    {
+      "local": "desktop",
+      "event": "step 6 recheck fails: attachment not live"
+    },
+    {
+      "expect": "desktop",
+      "assert": "input is never enabled for frame 42"
+    },
+    {
+      "expect": "tablet",
+      "assert": "a late frame_displayed for ATT would be ignored and cannot set a display reference"
+    }
+  ]
+}

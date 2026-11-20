@@ -1,0 +1,7 @@
+{
+  "schema": "http-v1",
+  "def": "logout.response",
+  "instance": {
+    "state": "logged_out"
+  }
+}

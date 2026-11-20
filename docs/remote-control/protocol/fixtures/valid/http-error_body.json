@@ -1,0 +1,9 @@
+{
+  "schema": "http-v1",
+  "def": "error_body",
+  "instance": {
+    "error": {
+      "code": "NOT_FOUND"
+    }
+  }
+}

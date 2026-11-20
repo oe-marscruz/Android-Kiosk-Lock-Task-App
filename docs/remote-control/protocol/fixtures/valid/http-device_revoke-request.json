@@ -1,0 +1,5 @@
+{
+  "schema": "http-v1",
+  "def": "device_revoke.request",
+  "instance": {}
+}

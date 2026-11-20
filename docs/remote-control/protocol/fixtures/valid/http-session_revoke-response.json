@@ -1,0 +1,8 @@
+{
+  "schema": "http-v1",
+  "def": "session_revoke.response",
+  "instance": {
+    "session_id": "sess_7Hq2LkP9xVb3Rt8Wm1Nz",
+    "state": "revoked"
+  }
+}

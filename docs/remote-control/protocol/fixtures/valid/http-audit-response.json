@@ -1,0 +1,24 @@
+{
+  "schema": "http-v1",
+  "def": "audit.response",
+  "instance": {
+    "items": [
+      {
+        "event_id": "evt_0000000000000001",
+        "occurred_at": "2026-11-20T18:30:00Z",
+        "principal": {
+          "issuer": "https://sso-trial.example.duosecurity.com/oidc/X",
+          "subject": "staff-123"
+        },
+        "session_id": "sess_7Hq2LkP9xVb3Rt8Wm1Nz",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "op": "tap",
+        "decision": "allow",
+        "reason": null,
+        "command_id": "c-0001",
+        "outcome": "ok"
+      }
+    ],
+    "next_cursor": "opaque.cursor.2"
+  }
+}

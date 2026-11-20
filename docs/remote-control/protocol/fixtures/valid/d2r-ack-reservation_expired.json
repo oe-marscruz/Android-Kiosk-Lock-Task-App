@@ -1,0 +1,13 @@
+{
+  "schema": "v1",
+  "def": "device_to_relay",
+  "instance": {
+    "v": 1,
+    "type": "ack",
+    "id": null,
+    "command_id": "c-0004",
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "ok": false,
+    "err": "RESERVATION_EXPIRED"
+  }
+}

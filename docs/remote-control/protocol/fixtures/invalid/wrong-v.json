@@ -1,0 +1,17 @@
+{
+  "schema": "v1",
+  "def": "staff_to_relay",
+  "defect": {
+    "keyword": "const",
+    "path": [
+      "v"
+    ]
+  },
+  "instance": {
+    "v": 2,
+    "type": "attach",
+    "id": "r-4",
+    "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "mode": "kiosk"
+  }
+}

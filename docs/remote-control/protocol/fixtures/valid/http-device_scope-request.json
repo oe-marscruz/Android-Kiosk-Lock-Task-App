@@ -1,0 +1,7 @@
+{
+  "schema": "http-v1",
+  "def": "device_scope.request",
+  "instance": {
+    "group_id": "equity-front-desk"
+  }
+}

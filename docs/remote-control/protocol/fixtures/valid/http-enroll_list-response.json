@@ -1,0 +1,17 @@
+{
+  "schema": "http-v1",
+  "def": "enroll_list.response",
+  "instance": {
+    "items": [
+      {
+        "request_id": "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+        "device_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "fingerprint": "AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01:AB:CD:EF:01",
+        "security_level": "tee",
+        "group_id": null,
+        "expires_at": "2026-11-20T18:30:00Z"
+      }
+    ],
+    "next_cursor": null
+  }
+}

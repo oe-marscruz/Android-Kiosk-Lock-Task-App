@@ -1,0 +1,12 @@
+{
+  "schema": "v1",
+  "def": "relay_to_device",
+  "instance": {
+    "v": 1,
+    "type": "attach_open",
+    "id": null,
+    "attachment_id": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "mode": "status",
+    "lease_ms": 60000
+  }
+}
