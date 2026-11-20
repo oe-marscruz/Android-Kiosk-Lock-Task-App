@@ -4,105 +4,35 @@ on:
   push:
     branches: [main, master]
     tags: ['v*']
-  workflow_dispatch:  # allow manual trigger from GitHub UI
+  workflow_dispatch:  # builds and verifies only; never publishes (§7.2)
+
+# Default-deny publication gate (ARCHITECTURE.md §7.2, release/README-publication.md).
+# Both jobs run the same single-job build→sign→verify→classify→publish workflow.
+# Only the v* tag push path gets contents: write; every other run is read-only.
+permissions:
+  contents: read
 
 jobs:
-  build-exe:
-    runs-on: windows-latest
+  candidate:
+    if: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
-      contents: write  # needed to create/update the GitHub Release
+      contents: read
+    uses: ./.github/workflows/windows-candidate.yml
+    secrets:
+      KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
+      KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
+      KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
+      WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
+      WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Download Android Platform Tools (Windows)
-        run: |
-          curl -L -o platform-tools.zip "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
-          Expand-Archive -Path platform-tools.zip -DestinationPath . -Force
-          Remove-Item platform-tools.zip
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Build APK from source (Gradle)
-        # The release must always bundle an APK built from the CURRENT source.
-        # Release-signed only when KIOSK_KEYSTORE_B64 is configured; otherwise
-        # debug-signed and labelled debug (ARCHITECTURE.md section 7.1).
-        shell: bash
-        env:
-          KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
-          KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
-          KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
-          KIOSK_CERT_SHA256: ${{ vars.KIOSK_CERT_SHA256 }}
-        run: |
-          set -euo pipefail
-          if [ -n "$KIOSK_KEYSTORE_B64" ]; then
-            export KIOSK_KEYSTORE="$RUNNER_TEMP/kiosk-release.keystore"
-            trap 'rm -f "$KIOSK_KEYSTORE"' EXIT
-            umask 077
-            printf '%s' "$KIOSK_KEYSTORE_B64" | base64 -d > "$KIOSK_KEYSTORE"
-          else
-            unset KIOSK_KEYSTORE_PASS KIOSK_KEYSTORE_ALIAS
-          fi
-          unset KIOSK_KEYSTORE_B64
-          bash build-apk.sh
-          variant=$(sed -n 's/^variant=//p' build/apk-info.txt)
-          echo "KIOSK_APK_VARIANT=$variant" >> "$GITHUB_ENV"
-
-      - name: Install PyInstaller
-        run: pip install pyinstaller
-
-      - name: Build Windows .exe
-        run: |
-          pyinstaller --onefile --windowed --name "CU-Denver-Equity-Kiosk-Manager" `
-            --add-data "platform-tools;platform-tools" `
-            --add-data "build/CU-Denver-Equity-Kiosk.apk;." `
-            kiosk-manager.py
-
-      - name: Upload EXE artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: Windows-EXE-${{ env.KIOSK_APK_VARIANT }}
-          path: |
-            dist/CU-Denver-Equity-Kiosk-Manager.exe
-            build/apk-info.txt
-          retention-days: 30
-
-      # Rolling "latest" release — always keeps the newest .exe downloadable
-      # from the repo's Releases page, no tag or PR required.
-      - name: Publish rolling latest release (push to main/master)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: latest
-          name: Latest build (${{ env.KIOSK_APK_VARIANT }} APK)
-          body: |
-            Latest Windows build of the CU Denver Equity Kiosk Manager.
-            Bundled kiosk APK: **${{ env.KIOSK_APK_VARIANT }}**-signed (see apk-info.txt).
-            Built automatically from the latest commit on main/master.
-            Download `CU-Denver-Equity-Kiosk-Manager.exe` below, double-click it,
-            connect the tablet via USB, and click **Setup Kiosk**.
-          files: |
-            dist/CU-Denver-Equity-Kiosk-Manager.exe
-            build/apk-info.txt
-          fail_on_unmatched_files: true
-
-      # Versioned release — attach the .exe when a version tag is pushed.
-      - name: Create versioned GitHub Release (on version tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
-        with:
-          name: ${{ github.ref_name }} (${{ env.KIOSK_APK_VARIANT }} APK)
-          files: |
-            dist/CU-Denver-Equity-Kiosk-Manager.exe
-            build/apk-info.txt
-          generate_release_notes: true
+  release:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/windows-candidate.yml
+    secrets:
+      KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
+      KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
+      KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
+      WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
+      WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}

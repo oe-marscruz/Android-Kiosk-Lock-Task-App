@@ -1,0 +1,8 @@
+# Remote-control inventory (ARCHITECTURE.md §7.2). Maintained list of paths that
+# make a build remote-capable. If any of them exists in the checkout or in the
+# package contents, the candidate is remote-capable, and REMOTE_FEATURES must be 1.
+# Format: one directory glob per line, ending in "/**". Blank lines and "#" are ignored.
+# app/src/main/java/<pkg>/** is also matched as dex class prefix L<pkg>/ inside every APK.
+relay/**
+kiosk_remote/**
+app/src/main/java/com/example/webkiosk/remote/**

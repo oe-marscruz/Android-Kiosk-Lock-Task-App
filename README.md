@@ -6,6 +6,8 @@ A complete toolkit for locking a Lenovo Tab K11 Gen 2 (Android 15) tablet into k
 
 **Direct download:** [CU-Denver-Equity-Kiosk-Manager.exe](https://github.com/TriBrigadeMars/Android-Kiosk-Lock-Task-App/releases/latest/download/CU-Denver-Equity-Kiosk-Manager.exe) — a single self-contained file (bundles ADB and the kiosk APK). No install needed: double-click it, connect the tablet via USB, and click **Setup Kiosk**.
 
+> **Note:** new builds are no longer published automatically. This link serves the last legacy build, which was not verified by the current publication gate. See [release/README-publication.md](release/README-publication.md).
+
 ---
 
 ## Architecture
@@ -104,10 +106,9 @@ The `.exe` is a single 36 MB file — no installer, no dependencies. It bundles 
 
 ## Download the prebuilt .exe
 
-Non-technical users don't need to build anything. A prepackaged Windows `.exe` is built automatically on every push to `main`/`master` by the `.github/workflows/build-exe.yml` workflow and can be downloaded two ways:
+Non-technical users don't need to build anything. The download link at the top of this page serves the **last legacy build**, from the old rolling `latest` release.
 
-- **GitHub Releases** (recommended) — a rolling **Latest build** release is published automatically on every push to `main`/`master`, so `CU-Denver-Equity-Kiosk-Manager.exe` is always downloadable from the repo's **Releases** page — no PR or build required. Versioned releases are also created when a version tag (e.g. `v1.0.0`) is pushed.
-- **GitHub Actions artifacts** — open the **Actions** tab, select the latest **Build Windows EXE** run, and download the `Windows-EXE` artifact.
+New builds are **not** published automatically. CI still builds and verifies every push to `main`/`master`, but it publishes only a `v*`-tagged build with a release-signed APK and a verified, Authenticode-signed `.exe`. It uploads no Actions artifacts. Signing isn't configured yet, so nothing publishes today. See [release/README-publication.md](release/README-publication.md).
 
 The `.exe` is a single self-contained file (bundles ADB and the kiosk APK) — no installer or dependencies. Just double-click it, connect the tablet via USB, and click **Setup Kiosk**.
 
