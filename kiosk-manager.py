@@ -4,6 +4,7 @@ A simple tool for non-technical users to set up and manage the kiosk tablet.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+import hashlib
 import subprocess
 import os
 import re
@@ -56,7 +57,7 @@ def adb(cmd_args, timeout=30):
 def install_failure_message(out, err, rc):
     """Classify `adb install -r` output: None on success, else a message for staff."""
     text = f"{out}\n{err}"
-    if rc == 0 and "Success" in text and "Failure" not in text:
+    if rc == 0 and "Success" in text.splitlines() and "Failure" not in text and "INSTALL_FAILED_UPDATE_INCOMPATIBLE" not in text:
         return None
     if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in text:
         reason = ("The kiosk app on this tablet is signed with a different key "
@@ -70,6 +71,18 @@ def install_failure_message(out, err, rc):
             "Device Owner and must not be removed.\nRecord this tablet in the signer "
             "inventory and arrange supervised reprovisioning "
             "(docs/remote-control/ARCHITECTURE.md section 7.1).")
+
+
+def local_apk_is_built(apk):
+    """Require the local APK to match the digest recorded by the build."""
+    try:
+        with open(os.path.join(os.path.dirname(apk), "apk-info.txt"), encoding="utf-8") as info:
+            entries = dict(line.strip().split("=", 1) for line in info if "=" in line)
+        with open(apk, "rb") as artifact:
+            digest = hashlib.file_digest(artifact, "sha256").hexdigest()
+        return entries.get("apk_sha256", "").lower() == digest
+    except (OSError, ValueError):
+        return False
 
 
 # ---------- GUI ----------
@@ -431,6 +444,10 @@ class KioskManager:
                 self.log_add(f"APK not found: {APK}")
                 self.log_add("Run setup-kiosk.bat first to build the APK.")
                 self.askbox("showerror", "Error", "APK not found.\nRun setup-kiosk.bat to build it first.")
+                return
+            if not getattr(sys, 'frozen', False) and not local_apk_is_built(APK):
+                self.log_add("APK does not match build metadata. Run setup-kiosk.bat to rebuild it.")
+                self.askbox("showerror", "Error", "APK build metadata missing or mismatched. Rebuild the APK first.")
                 return
             out, err, rc = adb(f'install -r "{APK}"')
             failure = install_failure_message(out, err, rc)

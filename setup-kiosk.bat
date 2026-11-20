@@ -29,7 +29,17 @@ if errorlevel 1 (
 echo         Device connected.
 
 echo [2/4] Building and installing the kiosk APK...
+del /q "build\CU-Denver-Equity-Kiosk.apk" 2>nul
+if exist "build\CU-Denver-Equity-Kiosk.apk" (
+    echo [ERROR] Could not remove the previous APK.
+    exit /b 1
+)
 call bash build-apk.sh
+if errorlevel 1 (
+    echo [ERROR] APK build failed.
+    pause
+    exit /b 1
+)
 if not exist "build\CU-Denver-Equity-Kiosk.apk" (
     echo [ERROR] APK build failed.
     pause
@@ -38,23 +48,31 @@ if not exist "build\CU-Denver-Equity-Kiosk.apk" (
 rem Never uninstall on failure: a Device Owner app cannot be removed, and a
 rem signer mismatch means this tablet needs the signer inventory/reprovisioning
 rem procedure (docs/remote-control/ARCHITECTURE.md section 7.1).
-"%ADB%" install -r "build\CU-Denver-Equity-Kiosk.apk" > "%TEMP%\kiosk-install.log" 2>&1
-findstr /i /c:"INSTALL_FAILED_UPDATE_INCOMPATIBLE" "%TEMP%\kiosk-install.log" >nul
+set "INSTALL_LOG=%TEMP%\kiosk-install-%RANDOM%%RANDOM%.log"
+"%ADB%" install -r "build\CU-Denver-Equity-Kiosk.apk" > "%INSTALL_LOG%" 2>&1
+set "INSTALL_RC=%ERRORLEVEL%"
+findstr /i /c:"INSTALL_FAILED_UPDATE_INCOMPATIBLE" "%INSTALL_LOG%" >nul
 if not errorlevel 1 (
-    type "%TEMP%\kiosk-install.log"
+    type "%INSTALL_LOG%"
     echo [ERROR] The installed kiosk app was signed with a different key.
     echo         Do NOT uninstall it. Record the installed signer and follow the
     echo         reprovisioning procedure before continuing.
     pause
     exit /b 1
 )
-findstr /i /c:"Success" "%TEMP%\kiosk-install.log" >nul
-if errorlevel 1 (
-    type "%TEMP%\kiosk-install.log"
+findstr /x /c:"Success" "%INSTALL_LOG%" >nul
+if errorlevel 1 goto install_failed
+if not "%INSTALL_RC%"=="0" goto install_failed
+goto install_succeeded
+:install_failed
+(
+    type "%INSTALL_LOG%"
     echo [ERROR] APK install failed. Setup stopped; nothing was uninstalled.
     pause
     exit /b 1
 )
+:install_succeeded
+del "%INSTALL_LOG%" 2>nul
 echo         Kiosk APK installed successfully.
 
 echo [3/4] Setting kiosk app as device owner...
