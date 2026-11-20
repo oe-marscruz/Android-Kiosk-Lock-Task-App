@@ -838,14 +838,21 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 | `push`, default branch | usb / release / signed | Labelled public prerelease |
 | `push`, `refs/tags/v*` | usb / release / signed | Labelled versioned release |
 | `push`, `refs/tags/v*` | remote / release / signed | Labelled versioned release, only with P0, P5b, §5.7, fleet-upgrade and §7.3 gates bound to the commit and final digest |
+| `pull_request` targeting the default branch | usb or remote / **debug** / unsigned | **PR test artifact** (§8.2 decision): a GitHub Actions artifact on that PR run, kept 14 days, carrying the debug warning. Never a release |
 
 | macOS event and ref | Class | Allowed mutation |
 |---|---|---|
 | `push`, default branch or `refs/tags/v*` | usb / debug or usb / release | Restricted internal upload |
 | `push`, default branch or `refs/tags/v*` | remote / release | Restricted internal upload, **only after P0 and §5.7 pass**, bound to the commit and final DMG digest |
+| `pull_request` targeting the default branch | usb or remote / **debug** | **PR test artifact**: Actions artifact, kept 14 days, with the debug warning |
 
   - **No public DMG.** There are no public DMG releases. A remote debug build is denied on both platforms.
-  - **What's denied.** PRs, `workflow_dispatch`, unknown classes, failed or missing checks, and every unlisted case are all denied.
+  - **What's denied.** `workflow_dispatch`, unknown classes, failed or missing checks, any release build on a PR, and every unlisted case are all denied.
+  - **PR test artifacts** (user decision, 2026-11-20):
+    - **Visibility.** The repo is public, so these artifacts are readable by anyone with read access. The user accepts this.
+    - **Content.** They are debug builds only, never release-signed.
+    - **Permissions and secrets.** PR jobs keep `contents: read`, get no secrets, and never create or modify releases.
+    - **Debug-only on PRs.** Remote-capable debug builds are allowed on PRs because every remote gate (staff login, wipe, touch) is off by default. They must still never be installed on fleet tablets.
   - **Internal uploads** need a verified, independently access-restricted `PRIVATE_ARTIFACT_DESTINATION`. If it's unset or invalid, nothing is uploaded.
 - **Candidate handoff.** The final bytes stay in the eligible job.
   - Build, sign, verify, classify and publish all happen in **one job per platform**.
@@ -858,7 +865,7 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
     - the final digest, immediately before the mutation
   - No artifact upload is ever used as a handoff between jobs.
   - Only an eligible release job gets `contents: write`.
-  - PRs get no secrets and no write permission.
+  - PRs get no secrets and no write permission. They may only upload the debug test artifact.
   - Secrets are never tested directly in `if:`.
 - **Release names.**
   - **The `latest` tag.** The old workflow publishes a release tagged **`latest`**. Normal builds never edit, replace or delete it. Retiring it is a separately authorized operation: a protected environment that requires approval.
@@ -892,10 +899,10 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 
 ## 8. Open questions for the user / stakeholders (not blocking P1a drafting)
 1. **Equity office:** Do you approve `attended_only` as the default? Do you want `status_admin` (unattended reload, home, lock and reboot)? Which states can be shared, and which workflows are sensitive? Is the banner wording acceptable?
-2. **Fleet signing and the public download:** Which keys signed the deployed tablets? (The §7.1 inventory answers this.) After P1b, new debug builds **stop publishing publicly**. They go only to a verified private destination, and nowhere if none is configured. Every internal USB-debug artifact carries this warning: "**Debug APK, not a fleet release. Each CI run may use a different signing key, so updates to existing installations can fail. Do not uninstall or reset to force an update. Inventory the installed signer and follow supervised recovery.**" Windows artifacts add "**Unsigned executable.**" **Decisions needed:**
-   - Where should internal test builds go?
-   - Should the legacy `latest` tag, its asset and the README `/releases/latest` link be retired or kept? The link's target can change once any versioned release is published.
-3. **Remote exit and re-entry (scope cut):** v1 denies remote `exit_kiosk` and `enter_kiosk`. Both are supervised local USB actions. Do you accept deferring remote exit to v2 (Appendix A)?
+2. **Fleet signing and the public download:** Which keys signed the deployed tablets? (The §7.1 inventory answers this.) **Decided on 2026-11-20:**
+   - Internal test builds are delivered as **PR test artifacts** on GitHub (§7.2). Each one carries this warning: "**Debug APK, not a fleet release. Each CI run may use a different signing key, so updates to existing installations can fail. Do not uninstall or reset to force an update. Inventory the installed signer and follow supervised recovery.**" Windows builds add "**Unsigned executable.**"
+   - The legacy `latest` tag, its asset and the README `/releases/latest` link are **kept, not retired**. Normal builds still never modify them.
+3. **Remote exit and re-entry (scope cut):** v1 denies remote `exit_kiosk` and `enter_kiosk`. Both are supervised local USB actions. **Accepted by the user on 2026-11-20: deferred to v2 (Appendix A).**
 4. **Windows code signing:** Does CU have an Authenticode identity?
 5. **CU OIT (P5b):** We need the issuer, the RP registration (callback `https://<relay>/auth/callback`), the `amr` values and what they mean, `auth_time`, confirmation that MFA is forced under `max_age=0` (including for remembered devices), and how bypass and skip are handled.
 6. **OCI:** What are the VM hostname and DNS, and who maintains them?
