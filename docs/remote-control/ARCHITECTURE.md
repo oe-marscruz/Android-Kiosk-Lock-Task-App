@@ -1,4 +1,4 @@
-# Remote Staff Control: Architecture (v0.5)
+# Remote Staff Control: Architecture (v0.6)
 
 Status: **v0.6, P0 GATE PASSED** (review #5: PASS-WITH-CHANGES). Should-fix items J01–J05 are merged. This is the baseline for the P1a freeze.
 
