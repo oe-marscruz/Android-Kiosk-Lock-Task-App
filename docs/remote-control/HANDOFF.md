@@ -75,3 +75,18 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 - **Equity office:** policy decisions.
 - **CU IT:** Windows test images.
 - **Signing:** the Authenticode certificate and the release keystore, plus the `KIOSK_CERT_SHA256` repo variable.
+
+### Update: the P1/P1b code review (GPT-6.2-sol) returned FAIL with 6 blockers
+- The review is at `reviews/CODE-review-P1-P1b.md` (`cce0bc0`). The duplicate GLM review was cancelled.
+- **Wave 1 is running.** Each item has its own Terra fixer. The fixers commit locally and do not push:
+  - K1: release fingerprint pin, in gradle and build-apk.sh
+  - K2: secrets in a protected environment, in the workflows and release README
+  - K4: setup stops on a failed build or install, in setup-kiosk.bat, kiosk-manager.py and tests
+  - K5: strict APK inspection, in the classifier and tests
+  - K8: build-tools 36 plus a manifest parity doc, in setup-tools*
+- **Wave 2 starts after wave 1.** Each item depends on a wave-1 change to the same file:
+  - **K3**, after K1: keep reusing the legacy `local_debug.keystore` for local debug builds. PR builds keep using a fresh debug key. Verify `install -r` against a fixture signed with the matching key.
+  - **K6**, after K5: independently confirm the APK's debug signer identity and the EXE's unsigned status. Reject missing or inconsistent evidence.
+  - **K7**, after K2: keep release publication disabled until write permission is inherited and RFC 3161 timestamps are validated. Disable asset overwrites. Check the PR base and merge ref at both upload steps.
+- **When all of K1–K8 are in:** push them, then run a new GPT-6.2-sol re-review of P1/P1b. After it passes, open a draft PR to upstream.
+- **P1a contract review** is running on GLM-5.3 Flash (high). If it returns FREEZE, record the freeze SHA here.
