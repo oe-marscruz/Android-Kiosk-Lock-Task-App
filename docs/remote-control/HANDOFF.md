@@ -14,7 +14,8 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 - [x] 9 fixes (fixes/G01–G09.md, Terra high/priority) merged into ARCHITECTURE v0.3. Reconciliation in §9
 - [x] P0 review #3: FAIL (reviews/P0-review-3.md, 5 blockers + 4 should-fix)
 - [x] 9 fixes (fixes/H01–H09.md) merged into ARCHITECTURE v0.4; reconciliation in §9
-- [ ] P0 review #4 (gpt-6.2-sol high), then the gate passes
+- [x] P0 review #4: FAIL with 1 blocker (remote exit). Remote exit removed from v1; I02–I06 merged into v0.5
+- [ ] P0 review #5 (gpt-6.2-sol high), then the gate passes
 - [x] P1 Gradle migration and signing/upgrade safety (b53269e), plus setup-kiosk.bat no-uninstall fix (9b6946e)
 - [ ] P1b publication gate (must merge before any P3/P4 code)
 - [ ] P1a contract freeze (record the reviewed commit ID here)
