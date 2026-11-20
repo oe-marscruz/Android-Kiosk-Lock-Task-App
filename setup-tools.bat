@@ -54,15 +54,21 @@ set "JDK=%~dp0jdk"
 for /d %%d in ("%JDK%\jdk-17*") do set "JAVA_HOME=%%d"
 set "SDK_ROOT=%~dp0android-sdk"
 
-echo y | powershell -Command "$env:JAVA_HOME='%JAVA_HOME%'; $input | & '%SDK_ROOT%\cmdline-tools\latest\bin\sdkmanager.bat' --sdk_root='%SDK_ROOT%' --licenses" >nul 2>&1
-powershell -Command "$env:JAVA_HOME='%JAVA_HOME%'; & '%SDK_ROOT%\cmdline-tools\latest\bin\sdkmanager.bat' --sdk_root='%SDK_ROOT%' 'platforms;android-35' 'build-tools;35.0.0'" >nul 2>&1
+if exist "android-sdk\platforms\android-35\android.jar" if exist "android-sdk\build-tools\36.0.0\aapt2.exe" goto verify_sdk
 
-if exist "android-sdk\platforms\android-35\android.jar" (
-    echo         SDK packages installed successfully.
-) else (
-    echo [WARNING] SDK package install may have failed.
-    echo Try running manually: bash build-apk.sh
+echo y | powershell -Command "$env:JAVA_HOME='%JAVA_HOME%'; $input | & '%SDK_ROOT%\cmdline-tools\latest\bin\sdkmanager.bat' --sdk_root='%SDK_ROOT%' --licenses" >nul 2>&1
+powershell -Command "$env:JAVA_HOME='%JAVA_HOME%'; & '%SDK_ROOT%\cmdline-tools\latest\bin\sdkmanager.bat' --sdk_root='%SDK_ROOT%' 'platforms;android-35' 'build-tools;35.0.0' 'build-tools;36.0.0'" >nul 2>&1
+
+:verify_sdk
+if not exist "android-sdk\platforms\android-35\android.jar" (
+    echo [ERROR] Android platform 35 is missing.
+    exit /b 1
 )
+if not exist "android-sdk\build-tools\36.0.0\aapt2.exe" (
+    echo [ERROR] Android Build Tools 36.0.0 is missing.
+    exit /b 1
+)
+echo         SDK packages installed successfully.
 
 echo.
 echo ============================================

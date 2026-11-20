@@ -52,14 +52,21 @@ export ANDROID_SDK_ROOT="$(pwd)/android-sdk"
 JDK_HOME=$(ls -d jdk/*/Contents/Home 2>/dev/null || ls -d jdk/Contents/Home 2>/dev/null || echo "jdk")
 export JAVA_HOME="$(pwd)/$JDK_HOME"
 
-echo y | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses 2>/dev/null || true
-"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" "platforms;android-35" "build-tools;35.0.0"
-
-if [ -f "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" ]; then
-    echo "    SDK packages installed successfully."
-else
-    echo "    WARNING: SDK package install may have failed."
+if [ ! -f "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" ] ||
+   [ ! -f "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2" ]; then
+    echo y | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses 2>/dev/null || true
+    "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" "platforms;android-35" "build-tools;35.0.0" "build-tools;36.0.0"
 fi
+
+if [ ! -f "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" ]; then
+    echo "    ERROR: Android platform 35 is missing." >&2
+    exit 1
+fi
+if [ ! -f "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2" ]; then
+    echo "    ERROR: Android Build Tools 36.0.0 is missing." >&2
+    exit 1
+fi
+echo "    SDK packages installed successfully."
 
 echo ""
 echo "============================================"
