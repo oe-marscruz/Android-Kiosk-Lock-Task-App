@@ -8,16 +8,18 @@ Never hardcode or ask for credentials in chat. Real Duo SSO login happens only a
 Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-App. It has uncommitted work.
 
 ## Status
-- [x] P0 drafted (ARCHITECTURE.md v0.1)
-- [x] P0 review #1: FAIL (reviews/P0-review-1.md, 7 blockers + 5 should-fix)
-- [ ] P0 fixes: 12 parallel Codex gpt-6.1-terra (high, priority) fixers, each writing fixes/FNN.md. The lead merges them into ARCHITECTURE v0.2, then a new gpt-6.2-sol re-review runs
-- [ ] P0 review gate PASS
-- [ ] P1 Gradle migration
-- [ ] P2 relay auth
-- [ ] P3 relay routing + desktop client
+- [x] P0 drafted (v0.1). Review #1 FAILED (reviews/P0-review-1.md)
+- [x] 12 fixes (fixes/F01–F12.md, Codex gpt-6.1-terra high/priority) merged into ARCHITECTURE v0.2. Reconciliation notes are in §9
+- [ ] P0 review #2 (gpt-6.2-sol high), then the gate passes
+- [ ] P1 Gradle migration and signing/upgrade safety
+- [ ] P1a contract freeze (record the reviewed commit ID here)
+- [ ] P2 relay security
+- [ ] P3 relay routing and desktop
+- [ ] P3i composed integration and deploy verification
+- [ ] P3k physical K11 feasibility spike (user + tablet)
 - [ ] P4 Android agent
-- [ ] P5 interactive SSO checkpoint (user)
-- [ ] P6 Windows packaging/verification
+- [ ] P5a Duo trial tenant (user) / P5b CU tenant (user + OIT)
+- [ ] P6 Windows packaging and release gate
 
 ## Environment notes (Arch dev box)
 - ~/Android/Sdk has build-tools 36.0.0 and platforms android-37.0 only. Install platform 35 and build-tools 35 via sdkmanager.
