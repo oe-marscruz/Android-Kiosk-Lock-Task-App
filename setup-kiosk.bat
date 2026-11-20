@@ -76,7 +76,7 @@ del "%INSTALL_LOG%" 2>nul
 echo         Kiosk APK installed successfully.
 
 echo [3/4] Setting kiosk app as device owner...
-"%ADB%" shell dpm set-device-owner com.example.webkiosk/.KioskDeviceAdminReceiver 2>&1 | findstr /i "already\|Success" >nul
+"%ADB%" shell dpm set-device-owner com.example.webkiosk/.KioskDeviceAdminReceiver 2>&1 | findstr /i /c:"Success" /c:"already" >nul
 if errorlevel 1 (
     echo [WARNING] Could not set device owner. It may already be set.
     echo         If Test DPC was the previous device owner, you may need to factory reset first.
