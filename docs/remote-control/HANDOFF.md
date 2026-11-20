@@ -20,6 +20,7 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 - [ ] P1b publication gate (in progress, Claude agent, shared checkout)
 - [x] P1 Gradle migration and signing/upgrade safety (b53269e), plus setup-kiosk.bat no-uninstall fix (9b6946e)
 - [ ] P1a contract freeze (record the reviewed commit ID here)
+  - P1a drafted at dc582f2; freeze pending review.
 - [ ] P2 relay security
 - [ ] P3 relay routing and desktop
 - [ ] P3i composed integration and deploy verification
