@@ -165,6 +165,47 @@ jobs:
           fi
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      # PR test artifact (user decision 2026-11-20, ARCHITECTURE.md §7.2/§8.2):
+      # debug APK + unsigned EXE from a pull_request into the default branch.
+      # Public-repo artifacts are readable by anyone with read access; accepted.
+      - name: Recheck PR artifact digest and write warning
+        id: prdigest
+        if: >-
+          steps.classify.outputs.allow_pr_artifact == 'true' &&
+          github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(sed -n 's/^exe_sha256=//p' build/candidate-record.txt)
+          actual=$(sha256sum "dist/$APP_NAME.exe" | cut -d' ' -f1)
+          if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            echo "::error::final EXE digest changed after classification"
+            exit 1
+          fi
+          cat > build/DEBUG-BUILD-WARNING.txt <<'EOF'
+          Debug APK, not a fleet release. Each CI run may use a different signing key,
+          so updates to existing installations can fail. Do not uninstall or reset to
+          force an update. Inventory the installed signer and follow supervised recovery.
+          Unsigned executable.
+          EOF
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload PR test artifact
+        if: >-
+          steps.classify.outputs.allow_pr_artifact == 'true' &&
+          steps.prdigest.outputs.ok == 'true' &&
+          github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-${{ github.event.pull_request.number }}-windows-usb-or-remote-debug-unsigned
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/CU-Denver-Equity-Kiosk-Manager.exe
+            build/apk-info.txt
+            build/candidate-record.txt
+            build/DEBUG-BUILD-WARNING.txt
+
       # Labelled versioned release: v* tag push, usb-only, release APK, verified
       # signed EXE. make_latest=false keeps the README /releases/latest link on
       # the legacy build until retiring it is separately authorized.

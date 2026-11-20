@@ -3,6 +3,10 @@ name: Build macOS DMG
 on:
   push:
     branches: [main, master]
+  # User decision 2026-11-20: PRs into the default branch upload a debug test
+  # artifact (Actions artifact only, never a release, no secrets).
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:  # builds and verifies only; never publishes (§7.2)
 
 # Default-deny publication gate (ARCHITECTURE.md §7.2, release/README-publication.md).
@@ -45,9 +49,10 @@ jobs:
 
       - name: Build APK from source (Gradle)
         env:
-          KIOSK_KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
-          KIOSK_KEYSTORE_PASS: ${{ secrets.KIOSK_KEYSTORE_PASS }}
-          KIOSK_KEYSTORE_ALIAS: ${{ secrets.KIOSK_KEYSTORE_ALIAS }}
+          # Same-repo PRs would otherwise receive secrets; PR builds stay debug.
+          KIOSK_KEYSTORE_B64: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_B64 || '' }}
+          KIOSK_KEYSTORE_PASS: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_PASS || '' }}
+          KIOSK_KEYSTORE_ALIAS: ${{ github.event_name != 'pull_request' && secrets.KIOSK_KEYSTORE_ALIAS || '' }}
           KIOSK_CERT_SHA256: ${{ vars.KIOSK_CERT_SHA256 }}
         run: |
           set -euo pipefail
@@ -111,6 +116,42 @@ jobs:
             --record build/candidate-record.txt
           cat build/candidate-record.txt
 
-      # No mutation step: macOS only allows a restricted internal upload, which
-      # needs a verified PRIVATE_ARTIFACT_DESTINATION. The classifier logs
-      # "internal upload suppressed: no verified private destination".
+      # Push builds: macOS only allows a restricted internal upload, which needs a
+      # verified PRIVATE_ARTIFACT_DESTINATION (none exists, so nothing uploads).
+      # PR builds: the debug test artifact below is the only mutation.
+
+      - name: Recheck PR artifact digest and write warning
+        id: prdigest
+        if: >-
+          steps.classify.outputs.allow_pr_artifact == 'true' &&
+          github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          expected=$(sed -n 's/^dmg_sha256=//p' build/candidate-record.txt)
+          actual=$(shasum -a 256 "$DMG" | cut -d' ' -f1)
+          if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            echo "::error::final DMG digest changed after classification"
+            exit 1
+          fi
+          cat > build/DEBUG-BUILD-WARNING.txt <<'EOF'
+          Debug APK, not a fleet release. Each CI run may use a different signing key,
+          so updates to existing installations can fail. Do not uninstall or reset to
+          force an update. Inventory the installed signer and follow supervised recovery.
+          EOF
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload PR test artifact
+        if: >-
+          steps.classify.outputs.allow_pr_artifact == 'true' &&
+          steps.prdigest.outputs.ok == 'true' &&
+          github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-${{ github.event.pull_request.number }}-macos-debug
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ${{ env.DMG }}
+            build/apk-info.txt
+            build/candidate-record.txt
+            build/DEBUG-BUILD-WARNING.txt

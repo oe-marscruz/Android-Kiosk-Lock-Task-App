@@ -4,6 +4,10 @@ on:
   push:
     branches: [main, master]
     tags: ['v*']
+  # User decision 2026-11-20: PRs into the default branch upload a debug test
+  # artifact (Actions artifact only, never a release, no secrets).
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:  # builds and verifies only; never publishes (§7.2)
 
 # Default-deny publication gate (ARCHITECTURE.md §7.2, release/README-publication.md).
@@ -13,8 +17,16 @@ permissions:
   contents: read
 
 jobs:
+  # PR builds: read-only token and NO secrets passed, so the APK is debug-signed
+  # and the EXE unsigned. The only possible mutation is the PR test artifact.
+  pr-test:
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-candidate.yml
+
   candidate:
-    if: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
       contents: read
     uses: ./.github/workflows/windows-candidate.yml

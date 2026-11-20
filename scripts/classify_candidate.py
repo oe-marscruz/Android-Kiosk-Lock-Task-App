@@ -262,14 +262,29 @@ class Decision:
     internal_upload: bool
     release_ref: str
     reason: str
+    pr_artifact: bool = False
 
 
 def decide(platform, event_name, ref, default_branch, capability, apk_class, exe_class,
-           private_destination_verified=False):
-    """Default-deny publication matrix (§7.2), narrowed for P1b: no remote, no prerelease."""
+           private_destination_verified=False, base_ref=""):
+    """Default-deny publication matrix (§7.2), narrowed for P1b: no remote release, no prerelease.
+
+    The one non-push path is the user-approved PR test artifact (§8.2): a debug build
+    of a pull request into the default branch, uploaded as an Actions artifact only.
+    """
     deny = lambda why: Decision(False, False, "", why)
     if platform not in ("windows", "macos"):
         return deny(f"unknown platform {platform!r}")
+    if event_name == "pull_request":
+        if not default_branch or base_ref != default_branch:
+            return deny(f"pull_request into {base_ref!r} is not into the default branch")
+        if capability not in ("usb-only", "remote-capable"):
+            return deny(f"unknown capability {capability!r}")
+        if apk_class != "debug":
+            return deny(f"PR test artifacts are debug-only (APK class {apk_class!r})")
+        if platform == "windows" and exe_class != "unsigned":
+            return deny(f"PR test artifacts are unsigned-only (EXE class {exe_class!r})")
+        return Decision(False, False, "", "PR test artifact (debug, not a fleet release)", pr_artifact=True)
     if event_name != "push":
         return deny(f"event {event_name!r} never publishes")
     is_default = bool(default_branch) and ref == f"refs/heads/{default_branch}"
@@ -354,7 +369,8 @@ def main(argv=None):
     destination_set = bool(os.environ.get("PRIVATE_ARTIFACT_DESTINATION"))
     # No destination verifier exists yet (P1b), so a configured value is still unverified.
     decision = decide(args.platform, event, ref, os.environ.get("DEFAULT_BRANCH", ""), cap, apk_class,
-                      exe_class, private_destination_verified=False)
+                      exe_class, private_destination_verified=False,
+                      base_ref=os.environ.get("GITHUB_BASE_REF", ""))
     label = f"{cap} / {apk_class} APK" + (f" / {exe_class} EXE" if args.platform == "windows" else "")
     commit = os.environ.get("GITHUB_SHA") or subprocess.run(
         ["git", "-C", args.repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -362,10 +378,12 @@ def main(argv=None):
                   exe_class=exe_class, exe_note=exe_note, inventory_hits=",".join(hits) or "none",
                   private_destination_configured=str(destination_set).lower(),
                   allow_public_release=str(decision.public_release).lower(),
-                  allow_internal_upload=str(decision.internal_upload).lower(), reason=decision.reason)
+                  allow_internal_upload=str(decision.internal_upload).lower(),
+                  allow_pr_artifact=str(decision.pr_artifact).lower(), reason=decision.reason)
     outputs = {"capability": cap, "apk_class": apk_class, "exe_class": exe_class, "label": label,
                "allow_public_release": record["allow_public_release"],
                "allow_internal_upload": record["allow_internal_upload"],
+               "allow_pr_artifact": record["allow_pr_artifact"],
                "release_ref": decision.release_ref, "reason": decision.reason}
 
     print(f"candidate: {label}")

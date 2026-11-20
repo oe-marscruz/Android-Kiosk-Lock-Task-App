@@ -69,3 +69,21 @@ When signing is configured, CI also runs `signtool verify /v /pa /all /tw`. It f
 - **RFC 3161 per-signature validation.** A pinned PKCS#7 parser (pinned by version and digest) must check every signature's RFC 3161 token (OID `1.3.6.1.4.1.311.3.3.1`): the token signature, the TSA chain, the time, and the message imprint against that signature. Until that's done, the signing step writes `rfc3161_validated=false`, so even a validly signed EXE is classified `unsigned` and never publishes (fail closed).
 - **Private destination verifier and upload step** for internal builds. Each upload must carry the debug warning that the classifier already prints.
 - **Duplicate CArchive entries.** `CArchiveReader` keeps one entry per name, so a duplicate `.apk` name can't be detected.
+
+## PR test artifacts (user decision 2026-11-20)
+
+A `pull_request` into the default branch builds a **debug** candidate and uploads it as a GitHub Actions artifact on that PR run, kept for 14 days:
+- Windows: `pr-<n>-windows-usb-or-remote-debug-unsigned`
+- macOS: `pr-<n>-macos-debug`
+
+Each artifact contains the package, `apk-info.txt`, `candidate-record.txt` and `DEBUG-BUILD-WARNING.txt`.
+- **Not a fleet release.** Never install one on a fleet tablet.
+- **Public.** The repository is public, so anyone with read access can download these artifacts. This has been accepted.
+- **No secrets.** PR jobs get no secrets and a read-only token. The APK is debug-signed, and the EXE is unsigned.
+- **No release changes.** PR jobs never create, edit or delete a release.
+- **Classifier gate.** The classifier allows the PR artifact only when all of these hold:
+  - the APK is `debug`
+  - on Windows, the EXE is `unsigned`
+  - `GITHUB_BASE_REF` is the default branch
+- **Legacy download kept.** The `latest` release, its asset and the README `/releases/latest` link are kept, not retired (user decision). Normal builds never touch them.
+

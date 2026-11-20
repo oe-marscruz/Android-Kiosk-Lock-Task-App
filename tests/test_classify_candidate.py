@@ -207,3 +207,33 @@ class Decide(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrTestArtifactTest(unittest.TestCase):
+    """User decision 2026-11-20: PR builds into the default branch upload a debug test artifact."""
+
+    def d(self, platform="windows", base="main", cap="usb-only", apk="debug", exe="unsigned", default="main"):
+        return cc.decide(platform, "pull_request", "refs/pull/7/merge", default, cap, apk, exe, base_ref=base)
+
+    def test_debug_pr_into_default_branch_uploads_artifact_only(self):
+        for platform in ("windows", "macos"):
+            for cap in ("usb-only", "remote-capable"):
+                d = self.d(platform=platform, cap=cap)
+                self.assertTrue(d.pr_artifact, (platform, cap))
+                self.assertFalse(d.public_release)
+                self.assertFalse(d.internal_upload)
+
+    def test_pr_denials(self):
+        self.assertFalse(self.d(base="feature").pr_artifact)
+        self.assertFalse(self.d(default="").pr_artifact)
+        self.assertFalse(self.d(apk="release").pr_artifact)
+        self.assertFalse(self.d(apk="release-unpinned").pr_artifact)
+        self.assertFalse(self.d(exe="authenticode-signed").pr_artifact)
+        self.assertFalse(self.d(cap="unknown").pr_artifact)
+
+    def test_push_and_dispatch_never_set_pr_artifact(self):
+        for event in ("push", "workflow_dispatch"):
+            for ref in ("refs/heads/main", "refs/tags/v1.0.0"):
+                d = cc.decide("windows", event, ref, "main", "usb-only", "debug", "unsigned", base_ref="main")
+                self.assertFalse(d.pr_artifact, (event, ref))
+
