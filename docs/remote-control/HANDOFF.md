@@ -90,3 +90,9 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
   - **K7**, after K2: keep release publication disabled until write permission is inherited and RFC 3161 timestamps are validated. Disable asset overwrites. Check the PR base and merge ref at both upload steps.
 - **When all of K1–K8 are in:** push them, then run a new GPT-6.2-sol re-review of P1/P1b. After it passes, open a draft PR to upstream.
 - **P1a contract review** is running on GLM-5.3 Flash (high). If it returns FREEZE, record the freeze SHA here.
+- **Progress:**
+  - **Done:** K2 `a2a3da1`, K4 `8da4e98`, K8 `ef4f52b`, K5 `1e8c896`, and the lead's `f079723` fixing the dpm findstr.
+  - **Running:** K1, plus K6 and K7.
+  - **Still to start:** K3, once K1 lands.
+  - **Operator step for the user:** set up the `release-signing` environment (see release/README-publication.md).
+  - **Check on real Windows:** K4's `findstr /x` (Wine ignores the `/x` flag).
