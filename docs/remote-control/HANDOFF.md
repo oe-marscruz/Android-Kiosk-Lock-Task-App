@@ -9,7 +9,9 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 
 ## Status
 - [x] P0 drafted (ARCHITECTURE.md v0.1)
-- [ ] P0 review gate (GPT-6.2-sol)
+- [x] P0 review #1: FAIL (reviews/P0-review-1.md, 7 blockers + 5 should-fix)
+- [ ] P0 fixes: 12 parallel Codex gpt-6.1-terra (high, priority) fixers, each writing fixes/FNN.md. The lead merges them into ARCHITECTURE v0.2, then a new gpt-6.2-sol re-review runs
+- [ ] P0 review gate PASS
 - [ ] P1 Gradle migration
 - [ ] P2 relay auth
 - [ ] P3 relay routing + desktop client
@@ -20,3 +22,7 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 ## Environment notes (Arch dev box)
 - ~/Android/Sdk has build-tools 36.0.0 and platforms android-37.0 only. Install platform 35 and build-tools 35 via sdkmanager.
 - `java` and `adb` aren't on PATH. Use Android Studio's bundled JBR.
+
+## Policy notes
+- Default policy is attended support: local opt-in on the tablet is required before any screen capture. Unattended mode may only expose status and non-content admin commands. This is pending confirmation from the Equity office.
+- Duo testing: P5a uses a user-owned Duo trial tenant with a local relay. P5b uses CU's tenant, which needs only a config change.
