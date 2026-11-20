@@ -1,4 +1,5 @@
 import java.security.MessageDigest
+import java.security.KeyStore
 
 plugins {
     id("com.android.application")
@@ -62,6 +63,29 @@ val requireReleaseSigning = tasks.register("requireReleaseSigning") {
                     "A release key is never generated automatically."
             )
         }
+        if (approvedCertSha256 == null || !approvedCertSha256.matches(Regex("[0-9a-f]{64}"))) {
+            throw GradleException("KIOSK_CERT_SHA256 must contain exactly 64 hexadecimal characters (colons allowed).")
+        }
+        val store = KeyStore.getInstance(KeyStore.getDefaultType())
+        try {
+            file(releaseKeystore!!).inputStream().use { store.load(it, releaseKeystorePass!!.toCharArray()) }
+            val cert = store.getCertificate(releaseKeyAlias!!)
+                ?: throw GradleException("No certificate found for release alias $releaseKeyAlias")
+            val actual = sha256Hex(cert.encoded)
+            if (actual != approvedCertSha256) {
+                throw GradleException("Release keystore certificate $actual does not match KIOSK_CERT_SHA256 $approvedCertSha256")
+            }
+        } catch (e: GradleException) {
+            throw e
+        } catch (e: Exception) {
+            throw GradleException("Unable to read release keystore certificate", e)
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name.matches(Regex("(?i)(package|sign|assemble|bundle).*Release"))) {
+        dependsOn(requireReleaseSigning)
     }
 }
 
@@ -96,7 +120,7 @@ listOf("debug", "release").forEach { variant ->
                 .findAll(output).map { it.groupValues[1].lowercase() }.toList()
             val signer = signers.singleOrNull()
                 ?: throw GradleException("Expected exactly one signer in ${apk.name}, found ${signers.size}:\n$output")
-            if (variant == "release" && approvedCertSha256 != null && signer != approvedCertSha256) {
+            if (variant == "release" && signer != approvedCertSha256) {
                 apk.delete()
                 throw GradleException(
                     "Release APK signer $signer does not match KIOSK_CERT_SHA256 $approvedCertSha256; deleted ${apk.name}"

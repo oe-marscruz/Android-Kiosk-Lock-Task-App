@@ -2,7 +2,7 @@
 # Build the CU Denver Equity Kiosk APK with Gradle (Linux, macOS, Windows Git Bash).
 #
 # Release: set KIOSK_KEYSTORE, KIOSK_KEYSTORE_PASS and KIOSK_KEYSTORE_ALIAS
-#          (optionally KIOSK_CERT_SHA256 to pin the signer certificate).
+#          and KIOSK_CERT_SHA256 to pin the signer certificate.
 # Debug:   none of them set; signed with the local Android debug key.
 # A partial set is an error. NEVER commit a keystore or its password.
 set -euo pipefail
@@ -37,6 +37,12 @@ for var in KIOSK_KEYSTORE KIOSK_KEYSTORE_PASS KIOSK_KEYSTORE_ALIAS; do
 done
 case "$set_count" in
   3) VARIANT=release TASK=assembleRelease
+     pin="${KIOSK_CERT_SHA256:-}"
+     pin="${pin//:/}"
+     if [[ ! "$pin" =~ ^[[:xdigit:]]{64}$ ]]; then
+       echo "ERROR: KIOSK_CERT_SHA256 must contain exactly 64 hexadecimal characters (colons allowed)." >&2
+       exit 1
+     fi
      export KIOSK_KEYSTORE="$(native_path "$KIOSK_KEYSTORE")" ;;
   0) VARIANT=debug TASK=assembleDebug ;;
   *) echo "ERROR: set all of KIOSK_KEYSTORE, KIOSK_KEYSTORE_PASS, KIOSK_KEYSTORE_ALIAS, or none." >&2
