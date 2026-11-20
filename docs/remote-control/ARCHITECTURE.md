@@ -1,6 +1,6 @@
 # Remote Staff Control: Architecture (v0.5)
 
-Status: **DRAFT v0.5**.
+Status: **v0.5, P0 GATE PASSED** (review #5: PASS-WITH-CHANGES). Should-fix items J01–J05 are being folded in for the P1a freeze.
 
 | Version | Review | Result | Fixes |
 |---|---|---|---|
@@ -615,10 +615,9 @@ Every message uses the envelope `{"v":1,"type":…,"id":…}`. Replies echo the 
    1. **Accessibility.** **Append** our component to `enabled_accessibility_services`, keeping every existing entry, and set `accessibility_enabled=1`. Read both back and confirm the service binds.
       - If that fails, use the supervised Settings flow and approve restricted settings. If it still fails, setup fails.
       - `setPermittedAccessibilityServices` takes package names. Leave a null policy alone, and keep any existing entries.
-   2. *(Exact-alarm setup has moved to Appendix A, since remote exit is deferred to v2.)*
-   3. **`DUMP` holder audit.** Enumerate installed packages for every relevant user, and record each package's granted permissions (including per-user grants) from `dumpsys package` against an approved baseline. `pm list permissions -f` shows the permission definition only, not who holds it. Investigate unexpected holders and remove them before enrollment, and repeat the audit after package changes.
-   4. **Reboot** and verify the settings persisted.
-   5. **Lock down debugging.** Disable USB and wireless debugging, revoke authorizations, and verify the old host can't connect.
+   2. **`DUMP` holder audit.** Enumerate installed packages for every relevant user, and record each package's granted permissions (including per-user grants) from `dumpsys package` against an approved baseline. `pm list permissions -f` shows the permission definition only, not who holds it. Investigate unexpected holders and remove them before enrollment, and repeat the audit after package changes.
+   3. **Reboot** and verify the settings persisted.
+   4. **Lock down debugging.** Disable USB and wireless debugging, revoke authorizations, and verify the old host can't connect.
 4. **FGS.** v1 has only the `specialUse` agent.
    - The projection order is:
      1. local visible activity
@@ -675,7 +674,7 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 | P3i | Lead | Compose P2 and P3: `create_app`, config, migrations, `deploy/` | Mock IdP → relay → fake tablet. Caddy checks: loopback backend, sentinel log redaction, live expiry and revocation |
 | P3k | Android agent + user | **K11 feasibility spike** | See "P3k checks" below |
 | P4 | Android agent | Agent, enrollment, kiosk capture and input, DPM commands, lock-task ownership and manifest switch, within capabilities P3k verified | Unit tests, mock relay, API 35 emulator, K11 checkpoint, §7.1 upgrade. See "P4 manifest-switch gates" below |
-| P5a | Lead + user | `trial` mode, Duo trial, local relay | Trial login turned on for testing. Record sanitized `amr`, `auth_time`, policy, and the bypass, skipped-MFA and remembered-device results. Step-up with a harmless substitute op. Wipe and exit stay off |
+| P5a | Lead + user | `trial` mode, Duo trial, local relay | Trial login turned on for testing. Record sanitized `amr`, `auth_time`, policy, and the bypass, skipped-MFA and remembered-device results. Step-up with a harmless substitute op. Wipe stays off |
 | P5b | Lead + user + CU OIT | CU tenant, `production` mode | Approve the evidence for issuer, RP, base policy and `amr` meaning, including negative tests, **before** enabling staff login. Separately prove `auth_time` and a fresh factor under `max_age=0` before enabling the wipe gate |
 | P6 | Desktop agent | Locked, signed Windows x64 release | CI signs and verifies. §7.3 run on the CU images |
 
@@ -779,13 +778,13 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 - **Flow.** Against staging and an enrolled test tablet, as an in-scope operator:
   1. Log in and list devices.
   2. Request a kiosk attachment and get local approval on the tablet.
-  3. Display a frame and tap a safe target.
+  3. Display a frame. **Only if the K11 touch-containment approval (P3k) is recorded for this build**, tap a safe target. On a view-only build, assert that touch is rejected (`DISABLED_BY_POLICY`).
   4. Detach, then log out.
   5. Log in again, cancel, and let one attempt time out. The listener must close each time.
 - **Listener and TLS.**
   - The listener binds `127.0.0.1` only. A competing bind fails, and it isn't reachable remotely.
   - TLS negative tests use the isolated test bundle.
-  - Redirect negative tests run against the packaged EXE.
+  - Redirect negative tests run against the frozen, packaged EXE, with `WEBSOCKETS_MAX_REDIRECTS` applied before the client module is imported.
 - **The gate fails** on any inbound firewall prompt or rule change, any UAC prompt, or a SmartScreen block.
 - **Evidence.** Record the image record, date, tester, commit, candidate SHA-256, signature result, staging config, tablet build, and each step with its outcome. Never record credentials, tokens or sensitive frames.
 
@@ -814,7 +813,7 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 **v0.3**
 - **Approval UI.** Native panels in `MainActivity` replace `SupportApprovalActivity`.
 - **Enrollment trigger.** The `DUMP` receiver gate was added.
-- **Gates.** `EXIT_KIOSK_ENABLED` and `DESTRUCTIVE_ACTIONS_ENABLED` are separate gates.
+- **Gates.** `EXIT_KIOSK_ENABLED` and `DESTRUCTIVE_ACTIONS_ENABLED` are separate gates. *(The exit gate is superseded in v0.5 and moved to Appendix A.)*
 - **Manifest switch.** The `normal` lockTaskMode change moved to P4.
 - **Live authority.** Authority is checked live, and devices are scoped by group.
 - **Publication gate.** It became P1b.
@@ -839,7 +838,7 @@ Rooting a locked-bootloader Lenovo would trip verified boot and Play Integrity, 
 
 *Lock-task ownership and exit (H05):*
 - Ownership is a controlled-transition invariant (`isTaskRoot` + task ID + `getAppTasks`). Android exposes no public way to query which task is locked.
-- `SCHEDULE_EXACT_ALARM` is added. Remote exit depends on exact-alarm access, which Device Owner status doesn't grant automatically.
+- `SCHEDULE_EXACT_ALARM` is added. Remote exit depends on exact-alarm access, which Device Owner status doesn't grant automatically. *(Superseded in v0.5: moved to Appendix A.)*
 
 *Login gating and desktop safety (H07):*
 - `DEPLOYMENT_MODE` and `STAFF_LOGIN_ENABLED` were added, giving three independent gates: base login, wipe and exit.
