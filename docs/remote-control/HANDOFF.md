@@ -35,3 +35,42 @@ Don't touch the user's local checkout ~/StudioProjects/Android-Kiosk-Lock-Task-A
 ## Policy notes
 - Default policy is attended support: local opt-in on the tablet is required before any screen capture. Unattended mode may only expose status and non-content admin commands. This is pending confirmation from the Equity office.
 - Duo testing: P5a uses a user-owned Duo trial tenant with a local relay. P5b uses CU's tenant, which needs only a config change.
+
+## Lead handoff (2026-11-20). Opus is near its usage limit, so DeepSeek V4.1 Flash (Command Code GOAT, thinking high) takes over
+
+**State at handoff**
+- **Branch** `feat/remote-staff-control` on the fork `origin`, pushed at `b73fb49`. The architecture is ARCHITECTURE.md v0.6, and the P0 gate has passed.
+- **Done:**
+  - P1 (`b53269e`): Gradle and fail-closed signing.
+  - `9b6946e`: `setup-kiosk.bat` no longer uninstalls.
+  - P1b (`0fd33fd`): default-deny publication gate.
+  - `b73fb49`: PR test artifacts.
+- **Running when the lead switched:**
+  1. **P1a contract freeze.** Claude agent, shared checkout. It is producing `relay/contracts.py`, `docs/remote-control/protocol/*`, fixtures, `tests/test_protocol_fixtures.py`, `.github/workflows/protocol.yml`, and `REMOTE_FEATURES` flipped to 1. The work is committed locally and NOT pushed. It is a draft until a reviewer passes it.
+  2. **Code review gate for P1 and P1b.** GLM-5.3 Flash (high, Command Code GOAT), read-only. It is checking the open question from the partial Sol review: the old and new APKs have different signer fingerprints, and their binary manifests differ in the launcher component.
+
+**User rules, binding on the new lead**
+- **Review gate.** No phase is finalized or merged without a review.
+  - Normal reviewer: Codex `gpt-6.2-sol`, high effort.
+  - While Codex is over its usage limit (resets 12:23 PM): GLM-5.3 Flash, high, Command Code GOAT. That is `pi` / `commandcode/z-ai/glm-5.3-flash`.
+- **Fixes for review findings.** Each finding gets its own subagent.
+  - Normal fixer: Codex `gpt-6.1-terra`, reasoningEffort high, serviceTier priority.
+  - If Terra fails: GLM 5.3 High (non-flash). Ask the user first, because Command Code lists only the flash model.
+- **Credentials.** Never ask for credentials in chat. Real Duo login happens only at P5a/P5b, done by the user.
+- **Pull requests.** PRs go from the fork to `TriBrigadeMars/master`. Open a draft PR only after the P1/P1b code review passes.
+- **Delegation.** Don't use worktree isolation; it fails here. Agents share the checkout and stage files by explicit path.
+
+**Next steps**
+1. **When the GLM review returns:** record it in `reviews/CODE-review-P1-P1b.md`. Send each blocker or should-fix finding to its own fixer, then re-review.
+2. **When P1a returns:** push it. Then run a contract review of `relay/contracts.py`, `protocol/v1.schema.json`, `v1.md` and the fixtures against ARCHITECTURE v0.6 §2.1, §3, §4. Freeze only after it passes, and record the freeze SHA here.
+3. **After both reviews pass:**
+   - Open a draft PR to upstream.
+   - Start P2 (relay auth) and P3 (relay ws plus `kiosk_remote`) in parallel, following ARCHITECTURE §7 ownership.
+   - P3k (the K11 spike) needs the user and the physical tablet.
+
+**Open items:**
+- **CU OIT, P5b:** issuer and claims.
+- **OCI:** VM hostname.
+- **Equity office:** policy decisions.
+- **CU IT:** Windows test images.
+- **Signing:** the Authenticode certificate and the release keystore, plus the `KIOSK_CERT_SHA256` repo variable.
